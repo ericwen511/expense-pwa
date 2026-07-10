@@ -51,7 +51,11 @@
 
   <!-- 總覽 -->
   <section id="screen-overview" class="screen active">
-    <p class="month-label" id="month-label"></p>
+    <div class="month-nav">
+      <button type="button" id="month-prev" class="month-nav-btn">‹</button>
+      <input type="month" id="month-picker" class="month-picker" />
+      <button type="button" id="month-next" class="month-nav-btn">›</button>
+    </div>
     <div class="summary-grid">
       <div class="summary-card">
         <p class="summary-label">支出</p>
@@ -66,7 +70,7 @@
         <p class="summary-value" id="sum-balance">$0</p>
       </div>
     </div>
-    <p class="section-title">近期交易</p>
+    <p class="section-title">當月交易</p>
     <div id="overview-list" class="tx-list"></div>
     <p class="empty-hint" id="overview-empty" style="display:none;">還沒有任何紀錄，點下方「新增」開始記帳。</p>
   </section>
@@ -91,6 +95,13 @@
         <input type="number" id="filter-amount-min" placeholder="最低" />
         <span>～</span>
         <input type="number" id="filter-amount-max" placeholder="最高" />
+      </div>
+
+      <p class="filter-group-label">日期區間</p>
+      <div class="amount-range-row">
+        <input type="date" id="filter-date-from" />
+        <span>～</span>
+        <input type="date" id="filter-date-to" />
       </div>
 
       <button type="button" id="filter-clear-btn" class="ghost-btn-full">清除篩選</button>
@@ -122,7 +133,6 @@
         <div class="calc-row">
           <button type="button" class="calc-btn calc-ac" data-key="AC">AC</button>
           <button type="button" class="calc-btn calc-del" data-key="DEL">DEL</button>
-          <button type="button" class="calc-btn calc-eq" data-key="=">=</button>
         </div>
         <div class="calc-row">
           <button type="button" class="calc-btn" data-key="7">7</button>

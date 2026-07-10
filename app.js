@@ -241,8 +241,9 @@ function evalExpr(expr) {
 }
 
 function updateCalcDisplay() {
-  document.getElementById('tx-amount-display').textContent = calcExpr;
-  document.getElementById('tx-amount').value = evalExpr(calcExpr);
+  const result = evalExpr(calcExpr);
+  document.getElementById('tx-amount-display').textContent = String(result);
+  document.getElementById('tx-amount').value = result;
 }
 
 function resetCalc() {
@@ -259,8 +260,6 @@ document.getElementById('tx-form').addEventListener('click', (e) => {
     calcExpr = '0';
   } else if (key === 'DEL') {
     calcExpr = calcExpr.length > 1 ? calcExpr.slice(0, -1) : '0';
-  } else if (key === '=') {
-    calcExpr = String(evalExpr(calcExpr));
   } else if (key === '.') {
     const lastNum = calcExpr.split(/[+\-*/]/).pop();
     if (!lastNum.includes('.')) calcExpr += '.';
@@ -334,13 +333,12 @@ function merchantName(id) {
 }
 
 /* ---------- 總覽畫面 ---------- */
-function renderOverview() {
-  const now = new Date();
-  const ym = now.toISOString().slice(0, 7);
-  document.getElementById('month-label').textContent =
-    now.getFullYear() + '年' + (now.getMonth() + 1) + '月';
+let overviewYearMonth = new Date().toISOString().slice(0, 7);
 
-  const monthTx = allTransactions.filter((t) => t.date.slice(0, 7) === ym);
+function renderOverview() {
+  document.getElementById('month-picker').value = overviewYearMonth;
+
+  const monthTx = allTransactions.filter((t) => t.date.slice(0, 7) === overviewYearMonth);
   const expense = monthTx.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
   const income = monthTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
 
@@ -349,11 +347,26 @@ function renderOverview() {
   document.getElementById('sum-balance').textContent = fmtMoney(income - expense);
 
   const list = document.getElementById('overview-list');
-  const recent = allTransactions.slice(0, 5);
   list.innerHTML = '';
-  document.getElementById('overview-empty').style.display = recent.length ? 'none' : 'block';
-  recent.forEach((t) => list.appendChild(buildTxRow(t, false)));
+  document.getElementById('overview-empty').style.display = monthTx.length ? 'none' : 'block';
+  monthTx.forEach((t) => list.appendChild(buildTxRow(t, false)));
 }
+
+function shiftOverviewMonth(delta) {
+  const [y, m] = overviewYearMonth.split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  overviewYearMonth = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  renderOverview();
+}
+
+document.getElementById('month-prev').addEventListener('click', () => shiftOverviewMonth(-1));
+document.getElementById('month-next').addEventListener('click', () => shiftOverviewMonth(1));
+document.getElementById('month-picker').addEventListener('change', (e) => {
+  if (e.target.value) {
+    overviewYearMonth = e.target.value;
+    renderOverview();
+  }
+});
 
 /* ---------- 交易列表畫面 ---------- */
 function renderList() {
@@ -369,6 +382,8 @@ function renderList() {
     if (filterState.categoryIds.length && !filterState.categoryIds.includes(t.categoryId)) return false;
     if (filterState.amountMin !== null && t.amount < filterState.amountMin) return false;
     if (filterState.amountMax !== null && t.amount > filterState.amountMax) return false;
+    if (filterState.dateFrom && t.date < filterState.dateFrom) return false;
+    if (filterState.dateTo && t.date > filterState.dateTo) return false;
     if (keyword) {
       const hay = ((t.note || '') + ' ' + categoryName(t.categoryId) + ' ' + merchantName(t.merchantId)).toLowerCase();
       if (!hay.includes(keyword)) return false;
@@ -737,7 +752,7 @@ document.getElementById('add-merchant-btn').addEventListener('click', async () =
 });
 
 /* ---------- 進階篩選 ---------- */
-let filterState = { accountIds: [], categoryIds: [], amountMin: null, amountMax: null };
+let filterState = { accountIds: [], categoryIds: [], amountMin: null, amountMax: null, dateFrom: null, dateTo: null };
 
 document.getElementById('toggle-advanced-filter').addEventListener('click', () => {
   const panel = document.getElementById('advanced-filter-panel');
@@ -795,11 +810,21 @@ document.getElementById('filter-amount-max').addEventListener('input', (e) => {
   filterState.amountMax = e.target.value === '' ? null : parseFloat(e.target.value);
   renderList();
 });
+document.getElementById('filter-date-from').addEventListener('change', (e) => {
+  filterState.dateFrom = e.target.value || null;
+  renderList();
+});
+document.getElementById('filter-date-to').addEventListener('change', (e) => {
+  filterState.dateTo = e.target.value || null;
+  renderList();
+});
 
 document.getElementById('filter-clear-btn').addEventListener('click', () => {
-  filterState = { accountIds: [], categoryIds: [], amountMin: null, amountMax: null };
+  filterState = { accountIds: [], categoryIds: [], amountMin: null, amountMax: null, dateFrom: null, dateTo: null };
   document.getElementById('filter-amount-min').value = '';
   document.getElementById('filter-amount-max').value = '';
+  document.getElementById('filter-date-from').value = '';
+  document.getElementById('filter-date-to').value = '';
   renderFilterChips();
   renderList();
 });
@@ -835,10 +860,14 @@ function renderPresetChips() {
         accountIds: preset.accountIds || [],
         categoryIds: preset.categoryIds || [],
         amountMin: preset.amountMin ?? null,
-        amountMax: preset.amountMax ?? null
+        amountMax: preset.amountMax ?? null,
+        dateFrom: preset.dateFrom ?? null,
+        dateTo: preset.dateTo ?? null
       };
       document.getElementById('filter-amount-min').value = filterState.amountMin ?? '';
       document.getElementById('filter-amount-max').value = filterState.amountMax ?? '';
+      document.getElementById('filter-date-from').value = filterState.dateFrom ?? '';
+      document.getElementById('filter-date-to').value = filterState.dateTo ?? '';
       renderFilterChips();
       renderList();
     });

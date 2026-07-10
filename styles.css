@@ -83,10 +83,34 @@ body {
 .screen { display: none; }
 .screen.active { display: block; }
 
-.month-label {
-  font-size: 13px;
+.month-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 4px 0 16px;
+}
+
+.month-nav-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  width: 32px;
+  height: 32px;
   color: var(--text-secondary);
-  margin: 4px 0 12px;
+  font-size: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.month-picker {
+  width: auto;
+  margin-bottom: 0;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  border-color: var(--border);
 }
 
 .summary-grid {
@@ -197,7 +221,7 @@ input, select, textarea, button {
   font-size: 14px;
 }
 
-input[type="text"], input[type="number"], input[type="date"], input[type="email"], input[type="password"], select, textarea {
+input[type="text"], input[type="number"], input[type="date"], input[type="month"], input[type="email"], input[type="password"], select, textarea {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--border);
@@ -374,7 +398,6 @@ label {
 }
 
 .calc-btn.calc-op { background: var(--primary-light); color: var(--primary); border-color: var(--primary-light); }
-.calc-btn.calc-eq { background: var(--primary); color: #fff; border-color: var(--primary); }
 .calc-btn.calc-ac { background: var(--expense-bg); color: var(--expense); border-color: var(--expense-bg); }
 .calc-btn.calc-del { background: var(--bg); color: var(--text-secondary); }
 .calc-btn.calc-zero { flex: 2; }
@@ -431,7 +454,7 @@ label {
   .logout-btn { font-size: 15px; padding: 5px 13px; }
   .auth-error { font-size: 16px; }
 
-  .month-label { font-size: 17px; }
+  .month-nav-btn { width: 38px; height: 38px; font-size: 19px; }
   .summary-grid { grid-template-columns: 1fr; }
   .summary-label { font-size: 16px; }
   .summary-value { font-size: 23px; }
@@ -445,7 +468,7 @@ label {
   .date-group-label { font-size: 16px; }
   .empty-hint { font-size: 19px; }
 
-  input[type="text"], input[type="number"], input[type="date"], select, textarea, button {
+  input[type="text"], input[type="number"], input[type="date"], input[type="month"], input[type="email"], input[type="password"], select, textarea, button {
     font-size: 19px;
     padding: 11px 12px;
   }
