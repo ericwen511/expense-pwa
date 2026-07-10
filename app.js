@@ -57,6 +57,14 @@ function dbDelete(storeName, id) {
   });
 }
 
+function dbPut(storeName, obj) {
+  return new Promise((resolve, reject) => {
+    const req = txStore(storeName, 'readwrite').put(obj);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
 function dbCount(storeName) {
   return new Promise((resolve, reject) => {
     const req = txStore(storeName, 'readonly').count();
@@ -88,7 +96,7 @@ async function seedDefaultsIfEmpty() {
       { name: '銀行帳戶', type: 'bank' },
       { name: '信用卡', type: 'credit_card' }
     ];
-    for (const a of defaults) await dbAdd('accounts', a);
+    for (const a of defaults) await dbAdd('accounts', { ...a, initial_balance: 0, is_archived: false });
   }
 
   const merchantCount = await dbCount('merchants');
@@ -138,6 +146,7 @@ async function refreshAll() {
   renderOverview();
   renderList();
   renderCategoryScreen();
+  renderAccountsScreen();
   populateFormSelectors();
   populateFilterSelectors();
 }
@@ -150,6 +159,21 @@ function categoryName(id) {
 function accountName(id) {
   const a = allAccounts.find((a) => a.id === id);
   return a ? a.name : '';
+}
+
+/* ---------- 帳戶動態餘額計算 ---------- */
+function accountBalance(accountId) {
+  const acc = allAccounts.find((a) => a.id === accountId);
+  let total = (acc && acc.initial_balance) ? acc.initial_balance : 0;
+  allTransactions.forEach((t) => {
+    if (t.type === 'transfer') {
+      if (t.accountId === accountId) total -= t.amount;
+      if (t.transferToAccountId === accountId) total += t.amount;
+    } else if (t.accountId === accountId) {
+      total += (t.type === 'income' ? t.amount : -t.amount);
+    }
+  });
+  return total;
 }
 
 function merchantName(id) {
@@ -187,7 +211,12 @@ function renderList() {
   const catFilter = document.getElementById('filter-category').value;
 
   let filtered = allTransactions.filter((t) => {
-    if (accFilter && String(t.accountId) !== accFilter) return false;
+    if (accFilter) {
+      const matchesAccount = t.type === 'transfer'
+        ? (String(t.accountId) === accFilter || String(t.transferToAccountId) === accFilter)
+        : String(t.accountId) === accFilter;
+      if (!matchesAccount) return false;
+    }
     if (catFilter && String(t.categoryId) !== catFilter) return false;
     if (keyword) {
       const hay = ((t.note || '') + ' ' + categoryName(t.categoryId) + ' ' + merchantName(t.merchantId)).toLowerCase();
@@ -229,9 +258,14 @@ function buildTxRow(t, showDelete) {
   info.appendChild(title);
   info.appendChild(meta);
 
+  if (t.type === 'transfer') {
+    title.textContent = t.note ? t.note : '轉帳';
+    meta.textContent = '從 ' + accountName(t.accountId) + ' 轉到 ' + accountName(t.transferToAccountId);
+  }
+
   const amount = document.createElement('p');
-  amount.className = 'tx-amount ' + (t.type === 'expense' ? 'expense' : 'income');
-  amount.textContent = (t.type === 'expense' ? '-' : '+') + fmtMoney(t.amount).replace('$', '$');
+  amount.className = 'tx-amount ' + (t.type === 'expense' ? 'expense' : t.type === 'income' ? 'income' : 'transfer');
+  amount.textContent = (t.type === 'expense' ? '-' : t.type === 'income' ? '+' : '') + fmtMoney(t.amount).replace('$', '$');
 
   row.appendChild(info);
   row.appendChild(amount);
@@ -259,19 +293,35 @@ function setTxType(type) {
   currentTxType = type;
   document.getElementById('btn-expense').classList.toggle('active', type === 'expense');
   document.getElementById('btn-income').classList.toggle('active', type === 'income');
+  document.getElementById('btn-transfer').classList.toggle('active', type === 'transfer');
+
+  const isTransfer = type === 'transfer';
+  document.getElementById('tx-category-row').style.display = isTransfer ? 'none' : 'block';
+  document.getElementById('tx-merchant-row').style.display = isTransfer ? 'none' : 'block';
+  document.getElementById('transfer-to-row').style.display = isTransfer ? 'block' : 'none';
+  document.getElementById('tx-category').required = !isTransfer;
+  document.getElementById('tx-account-label').textContent = isTransfer ? '轉出帳戶' : '帳戶';
+
   populateFormSelectors();
 }
 
 document.getElementById('btn-expense').addEventListener('click', () => setTxType('expense'));
 document.getElementById('btn-income').addEventListener('click', () => setTxType('income'));
+document.getElementById('btn-transfer').addEventListener('click', () => setTxType('transfer'));
 
 function populateFormSelectors() {
   const catSelect = document.getElementById('tx-category');
   const relevant = allCategories.filter((c) => c.type === currentTxType);
   catSelect.innerHTML = relevant.map((c) => `<option value="${c.id}">${c.name}</option>`).join('');
 
+  const activeAccounts = allAccounts.filter((a) => !a.is_archived);
+  const accOptions = activeAccounts.map((a) => `<option value="${a.id}">${a.name}</option>`).join('');
+
   const accSelect = document.getElementById('tx-account');
-  accSelect.innerHTML = allAccounts.map((a) => `<option value="${a.id}">${a.name}</option>`).join('');
+  accSelect.innerHTML = accOptions;
+
+  const transferToSelect = document.getElementById('tx-transfer-to');
+  transferToSelect.innerHTML = accOptions;
 
   const merchantSelect = document.getElementById('tx-merchant');
   const currentMerchant = merchantSelect.value;
@@ -293,22 +343,129 @@ document.getElementById('tx-form').addEventListener('submit', async (e) => {
   const amount = parseFloat(document.getElementById('tx-amount').value);
   if (!amount || amount <= 0) return;
 
-  const record = {
-    type: currentTxType,
-    amount: amount,
-    categoryId: Number(document.getElementById('tx-category').value),
-    accountId: Number(document.getElementById('tx-account').value),
-    merchantId: document.getElementById('tx-merchant').value ? Number(document.getElementById('tx-merchant').value) : null,
-    date: document.getElementById('tx-date').value,
-    note: document.getElementById('tx-note').value.trim(),
-    createdAt: Date.now()
-  };
+  const accountId = Number(document.getElementById('tx-account').value);
 
-  await dbAdd('transactions', record);
+  if (currentTxType === 'transfer') {
+    const transferToAccountId = Number(document.getElementById('tx-transfer-to').value);
+    if (accountId === transferToAccountId) {
+      alert('轉出帳戶跟轉入帳戶不能相同');
+      return;
+    }
+    const record = {
+      type: 'transfer',
+      amount: amount,
+      categoryId: null,
+      accountId: accountId,
+      transferToAccountId: transferToAccountId,
+      merchantId: null,
+      date: document.getElementById('tx-date').value,
+      note: document.getElementById('tx-note').value.trim(),
+      createdAt: Date.now()
+    };
+    await dbAdd('transactions', record);
+  } else {
+    const record = {
+      type: currentTxType,
+      amount: amount,
+      categoryId: Number(document.getElementById('tx-category').value),
+      accountId: accountId,
+      merchantId: document.getElementById('tx-merchant').value ? Number(document.getElementById('tx-merchant').value) : null,
+      date: document.getElementById('tx-date').value,
+      note: document.getElementById('tx-note').value.trim(),
+      createdAt: Date.now()
+    };
+    await dbAdd('transactions', record);
+  }
   e.target.reset();
   document.getElementById('tx-date').value = new Date().toISOString().slice(0, 10);
+  setTxType('expense');
   await refreshAll();
   switchTab('overview');
+});
+
+/* ---------- 帳戶管理畫面 ---------- */
+const accountTypeLabels = { cash: '現金', bank: '銀行帳戶', credit_card: '信用卡', other: '其他' };
+let editingAccountId = null;
+
+function renderAccountsScreen() {
+  const list = document.getElementById('account-list');
+  list.innerHTML = '';
+
+  allAccounts.forEach((a) => {
+    const row = document.createElement('div');
+    row.className = 'account-row' + (a.is_archived ? ' archived' : '');
+
+    const info = document.createElement('div');
+    info.className = 'account-info';
+    const name = document.createElement('p');
+    name.className = 'account-name';
+    name.textContent = a.name + (a.is_archived ? '（已停用）' : '');
+    const meta = document.createElement('p');
+    meta.className = 'account-meta';
+    meta.textContent = accountTypeLabels[a.type] || a.type;
+    info.appendChild(name);
+    info.appendChild(meta);
+
+    const balance = document.createElement('p');
+    balance.className = 'account-balance';
+    balance.textContent = fmtMoney(accountBalance(a.id));
+
+    const actions = document.createElement('div');
+    actions.className = 'cat-actions';
+
+    const editBtn = document.createElement('button');
+    editBtn.textContent = '編輯';
+    editBtn.addEventListener('click', () => startEditAccount(a));
+    actions.appendChild(editBtn);
+
+    const toggleBtn = document.createElement('button');
+    toggleBtn.textContent = a.is_archived ? '啟用' : '停用';
+    toggleBtn.addEventListener('click', async () => {
+      await dbPut('accounts', { ...a, is_archived: !a.is_archived });
+      await refreshAll();
+    });
+    actions.appendChild(toggleBtn);
+
+    row.appendChild(info);
+    row.appendChild(balance);
+    row.appendChild(actions);
+    list.appendChild(row);
+  });
+}
+
+function startEditAccount(a) {
+  editingAccountId = a.id;
+  document.getElementById('acc-name').value = a.name;
+  document.getElementById('acc-type').value = a.type;
+  document.getElementById('acc-initial').value = a.initial_balance || 0;
+  document.getElementById('account-form-submit').textContent = '更新帳戶';
+  document.getElementById('account-form-cancel').style.display = 'inline-block';
+}
+
+function cancelEditAccount() {
+  editingAccountId = null;
+  document.getElementById('account-form').reset();
+  document.getElementById('account-form-submit').textContent = '新增帳戶';
+  document.getElementById('account-form-cancel').style.display = 'none';
+}
+
+document.getElementById('account-form-cancel').addEventListener('click', cancelEditAccount);
+
+document.getElementById('account-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = document.getElementById('acc-name').value.trim();
+  if (!name) return;
+  const type = document.getElementById('acc-type').value;
+  const initial_balance = parseFloat(document.getElementById('acc-initial').value) || 0;
+
+  if (editingAccountId) {
+    const existing = allAccounts.find((a) => a.id === editingAccountId);
+    await dbPut('accounts', { ...existing, name, type, initial_balance });
+  } else {
+    await dbAdd('accounts', { name, type, initial_balance, is_archived: false });
+  }
+  cancelEditAccount();
+  await refreshAll();
 });
 
 /* ---------- 分類管理畫面 ---------- */
