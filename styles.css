@@ -226,6 +226,49 @@ label {
 .add-cat-row { display: flex; gap: 8px; }
 .add-cat-row input { margin-bottom: 0; }
 
+.hint-text { font-size: 12px; color: var(--text-muted); margin: -6px 0 8px; }
+
+.action-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 100;
+}
+
+.action-sheet {
+  width: 100%;
+  max-width: 480px;
+  background: var(--card);
+  border-radius: 16px 16px 0 0;
+  padding: 16px;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
+}
+
+.action-sheet-title {
+  text-align: center;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 4px 0 14px;
+}
+
+.action-sheet-btn {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text-primary);
+  font-weight: 600;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+
+.action-sheet-btn.delete { color: var(--expense); }
+.action-sheet-btn.cancel { background: none; color: var(--text-muted); margin-bottom: 0; }
+
 .account-list { display: flex; flex-direction: column; margin-bottom: 12px; }
 
 .account-row {
@@ -244,6 +287,40 @@ label {
 .account-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px !important; }
 
 .account-balance { font-size: 15px; font-weight: 600; flex-shrink: 0; white-space: nowrap; }
+
+.amount-display {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 12px;
+  font-size: 24px;
+  font-weight: 600;
+  text-align: right;
+  margin-bottom: 10px;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.calc-keypad { margin-bottom: 16px; }
+.calc-row { display: flex; gap: 8px; margin-bottom: 8px; }
+
+.calc-btn {
+  flex: 1;
+  padding: 14px 0;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text-primary);
+  font-size: 17px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.calc-btn.calc-op { background: var(--primary-light); color: var(--primary); border-color: var(--primary-light); }
+.calc-btn.calc-eq { background: var(--primary); color: #fff; border-color: var(--primary); }
+.calc-btn.calc-ac { background: var(--expense-bg); color: var(--expense); border-color: var(--expense-bg); }
+.calc-btn.calc-del { background: var(--bg); color: var(--text-secondary); }
+.calc-btn.calc-zero { flex: 2; }
 
 .ghost-btn-full {
   width: 100%;
@@ -325,6 +402,13 @@ label {
   .account-meta { font-size: 16px; }
   .account-balance { font-size: 20px; }
   .ghost-btn-full { font-size: 19px; padding: 11px; }
+
+  .amount-display { font-size: 30px; padding: 16px 14px; }
+  .calc-btn { font-size: 22px; padding: 17px 0; }
+
+  .hint-text { font-size: 15px; }
+  .action-sheet-title { font-size: 19px; }
+  .action-sheet-btn { font-size: 18px; padding: 15px; }
 
   .nav-btn { font-size: 13px; padding: 6px 6px; }
   .nav-btn .icon { font-size: 25px; }

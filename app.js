@@ -112,6 +112,7 @@ let allAccounts = [];
 let allTransactions = [];
 let allMerchants = [];
 let currentTxType = 'expense';
+let calcExpr = '0';
 
 /* ---------- 分頁切換 ---------- */
 function switchTab(tab) {
@@ -134,6 +135,69 @@ function fmtMoney(n) {
   const rounded = Math.round(n);
   return '$' + rounded.toLocaleString('zh-Hant-TW');
 }
+
+/* ---------- 金額計算機 ---------- */
+function evalExpr(expr) {
+  const trimmed = expr.replace(/[+\-*/.]+$/, '');
+  const tokens = trimmed.match(/(\d+\.?\d*)|[+\-*/]/g);
+  if (!tokens || !tokens.length) return 0;
+
+  const pass1 = [parseFloat(tokens[0]) || 0];
+  for (let i = 1; i < tokens.length; i += 2) {
+    const op = tokens[i];
+    const num = parseFloat(tokens[i + 1]) || 0;
+    if (op === '*' || op === '/') {
+      const prev = pass1.pop();
+      pass1.push(op === '*' ? prev * num : (num === 0 ? 0 : prev / num));
+    } else {
+      pass1.push(op, num);
+    }
+  }
+
+  let result = pass1[0];
+  for (let i = 1; i < pass1.length; i += 2) {
+    result = pass1[i] === '+' ? result + pass1[i + 1] : result - pass1[i + 1];
+  }
+  return result;
+}
+
+function updateCalcDisplay() {
+  document.getElementById('tx-amount-display').textContent = calcExpr;
+  document.getElementById('tx-amount').value = evalExpr(calcExpr);
+}
+
+function resetCalc() {
+  calcExpr = '0';
+  updateCalcDisplay();
+}
+
+document.getElementById('tx-form').addEventListener('click', (e) => {
+  const btn = e.target.closest('.calc-btn');
+  if (!btn) return;
+  const key = btn.dataset.key;
+
+  if (key === 'AC') {
+    calcExpr = '0';
+  } else if (key === 'DEL') {
+    calcExpr = calcExpr.length > 1 ? calcExpr.slice(0, -1) : '0';
+  } else if (key === '=') {
+    calcExpr = String(evalExpr(calcExpr));
+  } else if (key === '.') {
+    const lastNum = calcExpr.split(/[+\-*/]/).pop();
+    if (!lastNum.includes('.')) calcExpr += '.';
+  } else if (['+', '-', '*', '/'].includes(key)) {
+    if (calcExpr === '0') return;
+    if (/[+\-*/]$/.test(calcExpr)) {
+      calcExpr = calcExpr.slice(0, -1) + key;
+    } else {
+      calcExpr += key;
+    }
+  } else {
+    calcExpr = calcExpr === '0' ? key : calcExpr + key;
+  }
+
+  updateCalcDisplay();
+});
 
 /* ---------- 讀取所有資料並重繪畫面 ---------- */
 async function refreshAll() {
@@ -378,6 +442,7 @@ document.getElementById('tx-form').addEventListener('submit', async (e) => {
   }
   e.target.reset();
   document.getElementById('tx-date').value = new Date().toISOString().slice(0, 10);
+  resetCalc();
   setTxType('expense');
   await refreshAll();
   switchTab('overview');
@@ -480,20 +545,11 @@ function renderCategoryScreen() {
     row.className = 'cat-row';
     const name = document.createElement('span');
     name.textContent = c.name;
-    const actions = document.createElement('div');
-    actions.className = 'cat-actions';
-    const delBtn = document.createElement('button');
-    delBtn.className = 'delete';
-    delBtn.textContent = '刪除';
-    delBtn.addEventListener('click', async () => {
-      const inUse = allTransactions.some((t) => t.categoryId === c.id);
-      if (inUse && !confirm('這個分類已有交易使用，確定要刪除嗎？（交易紀錄會保留但顯示為未分類）')) return;
-      await dbDelete('categories', c.id);
-      await refreshAll();
-    });
-    actions.appendChild(delBtn);
     row.appendChild(name);
-    row.appendChild(actions);
+    row.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      openActionSheet('category', c);
+    });
     (c.type === 'expense' ? expenseList : incomeList).appendChild(row);
   });
 
@@ -504,23 +560,63 @@ function renderCategoryScreen() {
     row.className = 'cat-row';
     const name = document.createElement('span');
     name.textContent = m.name;
-    const actions = document.createElement('div');
-    actions.className = 'cat-actions';
-    const delBtn = document.createElement('button');
-    delBtn.className = 'delete';
-    delBtn.textContent = '刪除';
-    delBtn.addEventListener('click', async () => {
-      const inUse = allTransactions.some((t) => t.merchantId === m.id);
-      if (inUse && !confirm('這個商家已有交易使用，確定要刪除嗎？（交易紀錄會保留但顯示為不指定商家）')) return;
-      await dbDelete('merchants', m.id);
-      await refreshAll();
-    });
-    actions.appendChild(delBtn);
     row.appendChild(name);
-    row.appendChild(actions);
+    row.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      openActionSheet('merchant', m);
+    });
     merchantList.appendChild(row);
   });
 }
+
+/* ---------- 長按操作選單（編輯／刪除） ---------- */
+let actionSheetTarget = null;
+
+function openActionSheet(kind, item) {
+  actionSheetTarget = { kind, item };
+  document.getElementById('action-sheet-title').textContent = item.name;
+  document.getElementById('action-sheet-overlay').style.display = 'flex';
+}
+
+function closeActionSheet() {
+  actionSheetTarget = null;
+  document.getElementById('action-sheet-overlay').style.display = 'none';
+}
+
+document.getElementById('action-sheet-cancel').addEventListener('click', closeActionSheet);
+document.getElementById('action-sheet-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'action-sheet-overlay') closeActionSheet();
+});
+
+document.getElementById('action-sheet-edit').addEventListener('click', async () => {
+  const { kind, item } = actionSheetTarget;
+  closeActionSheet();
+  const newName = prompt('修改名稱', item.name);
+  if (newName === null) return;
+  const trimmed = newName.trim();
+  if (!trimmed) return;
+  if (kind === 'category') {
+    await dbPut('categories', { ...item, name: trimmed });
+  } else {
+    await dbPut('merchants', { ...item, name: trimmed });
+  }
+  await refreshAll();
+});
+
+document.getElementById('action-sheet-delete').addEventListener('click', async () => {
+  const { kind, item } = actionSheetTarget;
+  closeActionSheet();
+  if (kind === 'category') {
+    const inUse = allTransactions.some((t) => t.categoryId === item.id);
+    if (inUse && !confirm('這個分類已有交易使用，確定要刪除嗎？（交易紀錄會保留但顯示為未分類）')) return;
+    await dbDelete('categories', item.id);
+  } else {
+    const inUse = allTransactions.some((t) => t.merchantId === item.id);
+    if (inUse && !confirm('這個商家已有交易使用，確定要刪除嗎？（交易紀錄會保留但顯示為不指定商家）')) return;
+    await dbDelete('merchants', item.id);
+  }
+  await refreshAll();
+});
 
 async function addCategory(type, inputId) {
   const input = document.getElementById(inputId);

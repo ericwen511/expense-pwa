@@ -63,7 +63,38 @@
         <button type="button" id="btn-transfer" class="type-btn transfer-btn">轉帳</button>
       </div>
       <label>金額</label>
-      <input type="number" id="tx-amount" placeholder="0" min="0" step="1" required />
+      <div class="amount-display" id="tx-amount-display">0</div>
+      <input type="hidden" id="tx-amount" value="0" />
+      <div class="calc-keypad">
+        <div class="calc-row">
+          <button type="button" class="calc-btn calc-ac" data-key="AC">AC</button>
+          <button type="button" class="calc-btn calc-del" data-key="DEL">DEL</button>
+          <button type="button" class="calc-btn calc-eq" data-key="=">=</button>
+        </div>
+        <div class="calc-row">
+          <button type="button" class="calc-btn" data-key="7">7</button>
+          <button type="button" class="calc-btn" data-key="8">8</button>
+          <button type="button" class="calc-btn" data-key="9">9</button>
+          <button type="button" class="calc-btn calc-op" data-key="/">÷</button>
+        </div>
+        <div class="calc-row">
+          <button type="button" class="calc-btn" data-key="4">4</button>
+          <button type="button" class="calc-btn" data-key="5">5</button>
+          <button type="button" class="calc-btn" data-key="6">6</button>
+          <button type="button" class="calc-btn calc-op" data-key="*">×</button>
+        </div>
+        <div class="calc-row">
+          <button type="button" class="calc-btn" data-key="1">1</button>
+          <button type="button" class="calc-btn" data-key="2">2</button>
+          <button type="button" class="calc-btn" data-key="3">3</button>
+          <button type="button" class="calc-btn calc-op" data-key="-">－</button>
+        </div>
+        <div class="calc-row">
+          <button type="button" class="calc-btn calc-zero" data-key="0">0</button>
+          <button type="button" class="calc-btn" data-key=".">．</button>
+          <button type="button" class="calc-btn calc-op" data-key="+">＋</button>
+        </div>
+      </div>
 
       <div id="tx-category-row">
         <label>分類</label>
@@ -128,6 +159,7 @@
   <!-- 分類管理 -->
   <section id="screen-categories" class="screen">
     <p class="section-title">支出分類</p>
+    <p class="hint-text">長按項目可修改或刪除</p>
     <div id="expense-cat-list" class="cat-list"></div>
     <div class="add-cat-row">
       <input type="text" id="new-expense-cat" placeholder="新增支出分類名稱" />
@@ -150,6 +182,15 @@
   </section>
 
 </main>
+
+<div id="action-sheet-overlay" class="action-sheet-overlay" style="display:none;">
+  <div class="action-sheet">
+    <p id="action-sheet-title" class="action-sheet-title"></p>
+    <button type="button" id="action-sheet-edit" class="action-sheet-btn">編輯</button>
+    <button type="button" id="action-sheet-delete" class="action-sheet-btn delete">刪除</button>
+    <button type="button" id="action-sheet-cancel" class="action-sheet-btn cancel">取消</button>
+  </div>
+</div>
 
 <nav class="bottom-nav">
   <button class="nav-btn active" data-tab="overview"><i class="icon">⌂</i><span>總覽</span></button>
