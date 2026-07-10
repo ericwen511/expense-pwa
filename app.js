@@ -335,8 +335,33 @@ function merchantName(id) {
 /* ---------- 總覽畫面 ---------- */
 let overviewYearMonth = new Date().toISOString().slice(0, 7);
 
+function populateMonthNavSelectors() {
+  const yearSel = document.getElementById('year-select');
+  if (!yearSel.options.length) {
+    const maxYear = new Date().getFullYear() + 10;
+    for (let y = 2023; y <= maxYear; y++) {
+      const opt = document.createElement('option');
+      opt.value = String(y);
+      opt.textContent = y + '年';
+      yearSel.appendChild(opt);
+    }
+  }
+  const monthSel = document.getElementById('month-select');
+  if (!monthSel.options.length) {
+    for (let m = 1; m <= 12; m++) {
+      const opt = document.createElement('option');
+      opt.value = String(m);
+      opt.textContent = m + '月';
+      monthSel.appendChild(opt);
+    }
+  }
+}
+
 function renderOverview() {
-  document.getElementById('month-picker').value = overviewYearMonth;
+  populateMonthNavSelectors();
+  const [y, m] = overviewYearMonth.split('-');
+  document.getElementById('year-select').value = String(Number(y));
+  document.getElementById('month-select').value = String(Number(m));
 
   const monthTx = allTransactions.filter((t) => t.date.slice(0, 7) === overviewYearMonth);
   const expense = monthTx.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
@@ -493,12 +518,17 @@ function shiftOverviewMonth(delta) {
 
 document.getElementById('month-prev').addEventListener('click', () => shiftOverviewMonth(-1));
 document.getElementById('month-next').addEventListener('click', () => shiftOverviewMonth(1));
-document.getElementById('month-picker').addEventListener('change', (e) => {
-  if (e.target.value) {
-    overviewYearMonth = e.target.value;
-    renderOverview();
-  }
-});
+
+function applyYearMonthSelectors() {
+  const y = document.getElementById('year-select').value;
+  const m = document.getElementById('month-select').value.padStart(2, '0');
+  const next = `${y}-${m}`;
+  if (next < '2023-01') return;
+  overviewYearMonth = next;
+  renderOverview();
+}
+document.getElementById('year-select').addEventListener('change', applyYearMonthSelectors);
+document.getElementById('month-select').addEventListener('change', applyYearMonthSelectors);
 
 /* ---------- 交易列表畫面 ---------- */
 function renderList() {

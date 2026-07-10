@@ -53,21 +53,22 @@
   <section id="screen-overview" class="screen active">
     <div class="month-nav">
       <button type="button" id="month-prev" class="month-nav-btn">‹</button>
-      <input type="month" id="month-picker" class="month-picker" min="2023-01" />
+      <select id="year-select" class="year-select"></select>
+      <select id="month-select" class="month-select"></select>
       <button type="button" id="month-next" class="month-nav-btn">›</button>
     </div>
-    <div class="summary-grid">
-      <div class="summary-card">
-        <p class="summary-label">支出</p>
-        <p class="summary-value expense" id="sum-expense">$0</p>
+    <div class="summary-list">
+      <div class="summary-row">
+        <span class="summary-label">支出</span>
+        <span class="summary-value expense" id="sum-expense">$0</span>
       </div>
-      <div class="summary-card">
-        <p class="summary-label">收入</p>
-        <p class="summary-value income" id="sum-income">$0</p>
+      <div class="summary-row">
+        <span class="summary-label">收入</span>
+        <span class="summary-value income" id="sum-income">$0</span>
       </div>
-      <div class="summary-card">
-        <p class="summary-label">結餘</p>
-        <p class="summary-value" id="sum-balance">$0</p>
+      <div class="summary-row">
+        <span class="summary-label">結餘</span>
+        <span class="summary-value" id="sum-balance">$0</span>
       </div>
     </div>
     <div class="chart-section">
