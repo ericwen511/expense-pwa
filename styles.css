@@ -357,6 +357,16 @@ label {
 }
 .cat-actions button.delete { color: var(--expense); }
 
+.cat-more-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  color: var(--text-muted);
+  padding: 4px 10px;
+  flex-shrink: 0;
+}
+
 .add-cat-row { display: flex; gap: 8px; }
 .add-cat-row input { margin-bottom: 0; }
 
@@ -532,6 +542,7 @@ label {
 
   .cat-row span { font-size: 20px; }
   .cat-actions button { font-size: 19px; margin-left: 11px; }
+  .cat-more-btn { font-size: 24px; padding: 5px 12px; }
   .add-cat-row input { font-size: 19px; }
 
   .account-name { font-size: 20px; }

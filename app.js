@@ -820,7 +820,13 @@ function renderCategoryScreen() {
     row.className = 'cat-row';
     const name = document.createElement('span');
     name.textContent = c.name;
+    const moreBtn = document.createElement('button');
+    moreBtn.type = 'button';
+    moreBtn.className = 'cat-more-btn';
+    moreBtn.textContent = '⋯';
+    moreBtn.addEventListener('click', () => openActionSheet('category', c));
     row.appendChild(name);
+    row.appendChild(moreBtn);
     row.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       openActionSheet('category', c);
@@ -835,7 +841,13 @@ function renderCategoryScreen() {
     row.className = 'cat-row';
     const name = document.createElement('span');
     name.textContent = m.name;
+    const moreBtn = document.createElement('button');
+    moreBtn.type = 'button';
+    moreBtn.className = 'cat-more-btn';
+    moreBtn.textContent = '⋯';
+    moreBtn.addEventListener('click', () => openActionSheet('merchant', m));
     row.appendChild(name);
+    row.appendChild(moreBtn);
     row.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       openActionSheet('merchant', m);
