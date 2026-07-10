@@ -14,10 +14,28 @@
 
 <header class="app-header">
   <h1>個人記帳</h1>
-  <span id="offline-badge" class="badge" style="display:none;">離線模式</span>
+  <div class="header-actions">
+    <span id="offline-badge" class="badge" style="display:none;">離線模式</span>
+    <button type="button" id="logout-btn" class="logout-btn" style="display:none;">登出</button>
+  </div>
 </header>
 
-<main class="app-main">
+<!-- 登入/註冊 -->
+<section id="screen-auth" class="auth-screen">
+  <p class="section-title">登入個人記帳</p>
+  <label>Email</label>
+  <input type="email" id="auth-email" placeholder="you@example.com" />
+
+  <label>密碼</label>
+  <input type="password" id="auth-password" placeholder="至少6碼" />
+
+  <p class="auth-error" id="auth-error" style="display:none;"></p>
+
+  <button type="button" id="auth-login-btn" class="primary-btn">登入</button>
+  <button type="button" id="auth-signup-btn" class="ghost-btn-full">還沒有帳號？註冊新帳號</button>
+</section>
+
+<main class="app-main" id="app-shell" style="display:none;">
 
   <!-- 總覽 -->
   <section id="screen-overview" class="screen active">
@@ -192,7 +210,7 @@
   </div>
 </div>
 
-<nav class="bottom-nav">
+<nav class="bottom-nav" id="bottom-nav" style="display:none;">
   <button class="nav-btn active" data-tab="overview"><i class="icon">⌂</i><span>總覽</span></button>
   <button class="nav-btn" data-tab="accounts"><i class="icon">$</i><span>帳戶</span></button>
   <button class="nav-btn" data-tab="list"><i class="icon">≡</i><span>列表</span></button>
@@ -200,6 +218,8 @@
   <button class="nav-btn" data-tab="categories"><i class="icon">⚙</i><span>管理</span></button>
 </nav>
 
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -50,6 +50,30 @@ body {
   border-radius: 999px;
 }
 
+.header-actions { display: flex; align-items: center; gap: 10px; }
+
+.logout-btn {
+  font-size: 12px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.auth-screen {
+  max-width: 480px;
+  margin: 40px auto 0;
+  padding: 16px;
+}
+
+.auth-error {
+  color: var(--expense);
+  font-size: 13px;
+  margin: -6px 0 12px;
+}
+
 .app-main {
   max-width: 480px;
   margin: 0 auto;
@@ -140,7 +164,7 @@ input, select, textarea, button {
   font-size: 14px;
 }
 
-input[type="text"], input[type="number"], input[type="date"], select, textarea {
+input[type="text"], input[type="number"], input[type="date"], input[type="email"], input[type="password"], select, textarea {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--border);
@@ -371,6 +395,8 @@ label {
 @media (max-width: 599px) {
   .app-header h1 { font-size: 24px; }
   .badge { font-size: 16px; padding: 5px 13px; }
+  .logout-btn { font-size: 15px; padding: 5px 13px; }
+  .auth-error { font-size: 16px; }
 
   .month-label { font-size: 17px; }
   .summary-grid { grid-template-columns: 1fr; }

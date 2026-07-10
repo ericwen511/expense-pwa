@@ -1,6 +1,6 @@
-/* ---------- IndexedDB 基礎層 ---------- */
+/* ---------- IndexedDB：離線交易佇列（未連上Supabase前暫存） ---------- */
 const DB_NAME = 'expenseTrackerDB';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 let dbInstance = null;
 
 function openDB() {
@@ -9,18 +9,8 @@ function openDB() {
 
     req.onupgradeneeded = (e) => {
       const db = e.target.result;
-      if (!db.objectStoreNames.contains('accounts')) {
-        db.createObjectStore('accounts', { keyPath: 'id', autoIncrement: true });
-      }
-      if (!db.objectStoreNames.contains('categories')) {
-        db.createObjectStore('categories', { keyPath: 'id', autoIncrement: true });
-      }
-      if (!db.objectStoreNames.contains('transactions')) {
-        const store = db.createObjectStore('transactions', { keyPath: 'id', autoIncrement: true });
-        store.createIndex('date', 'date');
-      }
-      if (!db.objectStoreNames.contains('merchants')) {
-        db.createObjectStore('merchants', { keyPath: 'id', autoIncrement: true });
+      if (!db.objectStoreNames.contains('pending_transactions')) {
+        db.createObjectStore('pending_transactions', { keyPath: 'clientGeneratedId' });
       }
     };
 
@@ -29,53 +19,142 @@ function openDB() {
   });
 }
 
-function txStore(storeName, mode) {
+function idbStore(storeName, mode) {
   return dbInstance.transaction(storeName, mode).objectStore(storeName);
 }
 
-function dbGetAll(storeName) {
+function idbGetAll(storeName) {
   return new Promise((resolve, reject) => {
-    const req = txStore(storeName, 'readonly').getAll();
+    const req = idbStore(storeName, 'readonly').getAll();
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
 }
 
-function dbAdd(storeName, obj) {
+function idbPut(storeName, obj) {
   return new Promise((resolve, reject) => {
-    const req = txStore(storeName, 'readwrite').add(obj);
+    const req = idbStore(storeName, 'readwrite').put(obj);
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
 }
 
-function dbDelete(storeName, id) {
+function idbDelete(storeName, id) {
   return new Promise((resolve, reject) => {
-    const req = txStore(storeName, 'readwrite').delete(id);
+    const req = idbStore(storeName, 'readwrite').delete(id);
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
   });
 }
 
-function dbPut(storeName, obj) {
-  return new Promise((resolve, reject) => {
-    const req = txStore(storeName, 'readwrite').put(obj);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
+/* ---------- Supabase 資料存取層 ---------- */
+let currentUserId = null;
+
+async function sbGetAll(table) {
+  const { data, error } = await supabaseClient.from(table).select('*');
+  if (error) throw error;
+  return data;
 }
 
-function dbCount(storeName) {
-  return new Promise((resolve, reject) => {
-    const req = txStore(storeName, 'readonly').count();
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
+async function sbCount(table) {
+  const { count, error } = await supabaseClient.from(table).select('*', { count: 'exact', head: true });
+  if (error) throw error;
+  return count || 0;
+}
+
+async function sbInsert(table, row) {
+  const { data, error } = await supabaseClient.from(table).insert({ ...row, user_id: currentUserId }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+async function sbUpdate(table, id, patch) {
+  const { data, error } = await supabaseClient.from(table).update(patch).eq('id', id).select().single();
+  if (error) throw error;
+  return data;
+}
+
+async function sbDeleteHard(table, id) {
+  const { error } = await supabaseClient.from(table).delete().eq('id', id);
+  if (error) throw error;
+}
+
+/* 交易表欄位是snake_case，這裡跟畫面用的camelCase互轉 */
+function txToRow(t) {
+  return {
+    type: t.type,
+    amount: t.amount,
+    category_id: t.categoryId || null,
+    account_id: t.accountId,
+    merchant_id: t.merchantId || null,
+    transfer_to_account_id: t.transferToAccountId || null,
+    transaction_date: t.date,
+    note: t.note || null,
+    client_generated_id: t.clientGeneratedId
+  };
+}
+
+function txFromRow(row) {
+  return {
+    id: row.id,
+    type: row.type,
+    amount: Number(row.amount),
+    categoryId: row.category_id,
+    accountId: row.account_id,
+    merchantId: row.merchant_id,
+    transferToAccountId: row.transfer_to_account_id,
+    date: row.transaction_date,
+    note: row.note || '',
+    clientGeneratedId: row.client_generated_id,
+    createdAt: row.created_at
+  };
+}
+
+async function sbInsertTransaction(row) {
+  const { data, error } = await supabaseClient
+    .from('transactions')
+    .insert({ ...row, user_id: currentUserId })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function sbSoftDeleteTransaction(id) {
+  const { error } = await supabaseClient
+    .from('transactions')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+async function sbGetAllTransactions() {
+  const { data, error } = await supabaseClient.from('transactions').select('*').is('deleted_at', null);
+  if (error) throw error;
+  return data.map(txFromRow);
+}
+
+/* 離線時新增的交易先進本機佇列，恢復連線後再補上傳 */
+async function flushPendingQueue() {
+  const pending = await idbGetAll('pending_transactions');
+  for (const p of pending) {
+    try {
+      await sbInsertTransaction(txToRow(p));
+      await idbDelete('pending_transactions', p.clientGeneratedId);
+    } catch (err) {
+      if (err && err.code === '23505') {
+        // 已經同步過(重試造成的重複)，視為成功並清掉佇列
+        await idbDelete('pending_transactions', p.clientGeneratedId);
+        continue;
+      }
+      break;
+    }
+  }
 }
 
 /* ---------- 預設資料（僅第一次使用時建立） ---------- */
 async function seedDefaultsIfEmpty() {
-  const catCount = await dbCount('categories');
+  const catCount = await sbCount('categories');
   if (catCount === 0) {
     const defaults = [
       { name: '餐飲', type: 'expense' },
@@ -86,23 +165,23 @@ async function seedDefaultsIfEmpty() {
       { name: '獎金', type: 'income' },
       { name: '投資收益', type: 'income' }
     ];
-    for (const c of defaults) await dbAdd('categories', c);
+    for (const c of defaults) await sbInsert('categories', c);
   }
 
-  const accCount = await dbCount('accounts');
+  const accCount = await sbCount('accounts');
   if (accCount === 0) {
     const defaults = [
       { name: '現金', type: 'cash' },
       { name: '銀行帳戶', type: 'bank' },
       { name: '信用卡', type: 'credit_card' }
     ];
-    for (const a of defaults) await dbAdd('accounts', { ...a, initial_balance: 0, is_archived: false });
+    for (const a of defaults) await sbInsert('accounts', { ...a, initial_balance: 0, is_archived: false });
   }
 
-  const merchantCount = await dbCount('merchants');
+  const merchantCount = await sbCount('merchants');
   if (merchantCount === 0) {
     const defaults = ['全聯', '星巴克', '萬家福', '樂家康'];
-    for (const name of defaults) await dbAdd('merchants', { name });
+    for (const name of defaults) await sbInsert('merchants', { name });
   }
 }
 
@@ -201,11 +280,19 @@ document.getElementById('tx-form').addEventListener('click', (e) => {
 
 /* ---------- 讀取所有資料並重繪畫面 ---------- */
 async function refreshAll() {
-  allCategories = await dbGetAll('categories');
-  allAccounts = await dbGetAll('accounts');
-  allMerchants = await dbGetAll('merchants');
-  allTransactions = await dbGetAll('transactions');
-  allTransactions.sort((a, b) => (b.date + b.id).localeCompare(a.date + a.id));
+  await flushPendingQueue();
+
+  allCategories = await sbGetAll('categories');
+  allAccounts = await sbGetAll('accounts');
+  allMerchants = await sbGetAll('merchants');
+  const synced = await sbGetAllTransactions();
+  const pending = (await idbGetAll('pending_transactions')).map((p) => ({
+    ...p,
+    id: 'pending-' + p.clientGeneratedId,
+    pending: true
+  }));
+  allTransactions = synced.concat(pending);
+  allTransactions.sort((a, b) => (b.date + b.createdAt).localeCompare(a.date + a.createdAt));
 
   renderOverview();
   renderList();
@@ -327,6 +414,10 @@ function buildTxRow(t, showDelete) {
     meta.textContent = '從 ' + accountName(t.accountId) + ' 轉到 ' + accountName(t.transferToAccountId);
   }
 
+  if (t.pending) {
+    meta.textContent += ' · 待同步';
+  }
+
   const amount = document.createElement('p');
   amount.className = 'tx-amount ' + (t.type === 'expense' ? 'expense' : t.type === 'income' ? 'income' : 'transfer');
   amount.textContent = (t.type === 'expense' ? '-' : t.type === 'income' ? '+' : '') + fmtMoney(t.amount).replace('$', '$');
@@ -339,7 +430,11 @@ function buildTxRow(t, showDelete) {
     delBtn.className = 'tx-delete';
     delBtn.textContent = '刪除';
     delBtn.addEventListener('click', async () => {
-      await dbDelete('transactions', t.id);
+      if (t.pending) {
+        await idbDelete('pending_transactions', t.clientGeneratedId);
+      } else {
+        await sbSoftDeleteTransaction(t.id);
+      }
       await refreshAll();
     });
     row.appendChild(delBtn);
@@ -407,15 +502,16 @@ document.getElementById('tx-form').addEventListener('submit', async (e) => {
   const amount = parseFloat(document.getElementById('tx-amount').value);
   if (!amount || amount <= 0) return;
 
-  const accountId = Number(document.getElementById('tx-account').value);
+  const accountId = document.getElementById('tx-account').value;
+  let record;
 
   if (currentTxType === 'transfer') {
-    const transferToAccountId = Number(document.getElementById('tx-transfer-to').value);
+    const transferToAccountId = document.getElementById('tx-transfer-to').value;
     if (accountId === transferToAccountId) {
       alert('轉出帳戶跟轉入帳戶不能相同');
       return;
     }
-    const record = {
+    record = {
       type: 'transfer',
       amount: amount,
       categoryId: null,
@@ -423,23 +519,27 @@ document.getElementById('tx-form').addEventListener('submit', async (e) => {
       transferToAccountId: transferToAccountId,
       merchantId: null,
       date: document.getElementById('tx-date').value,
-      note: document.getElementById('tx-note').value.trim(),
-      createdAt: Date.now()
+      note: document.getElementById('tx-note').value.trim()
     };
-    await dbAdd('transactions', record);
   } else {
-    const record = {
+    record = {
       type: currentTxType,
       amount: amount,
-      categoryId: Number(document.getElementById('tx-category').value),
+      categoryId: document.getElementById('tx-category').value,
       accountId: accountId,
-      merchantId: document.getElementById('tx-merchant').value ? Number(document.getElementById('tx-merchant').value) : null,
+      merchantId: document.getElementById('tx-merchant').value || null,
       date: document.getElementById('tx-date').value,
-      note: document.getElementById('tx-note').value.trim(),
-      createdAt: Date.now()
+      note: document.getElementById('tx-note').value.trim()
     };
-    await dbAdd('transactions', record);
   }
+
+  record.clientGeneratedId = crypto.randomUUID();
+  try {
+    await sbInsertTransaction(txToRow(record));
+  } catch (err) {
+    await idbPut('pending_transactions', { ...record, createdAt: new Date().toISOString() });
+  }
+
   e.target.reset();
   document.getElementById('tx-date').value = new Date().toISOString().slice(0, 10);
   resetCalc();
@@ -486,7 +586,7 @@ function renderAccountsScreen() {
     const toggleBtn = document.createElement('button');
     toggleBtn.textContent = a.is_archived ? '啟用' : '停用';
     toggleBtn.addEventListener('click', async () => {
-      await dbPut('accounts', { ...a, is_archived: !a.is_archived });
+      await sbUpdate('accounts', a.id, { is_archived: !a.is_archived });
       await refreshAll();
     });
     actions.appendChild(toggleBtn);
@@ -524,10 +624,9 @@ document.getElementById('account-form').addEventListener('submit', async (e) => 
   const initial_balance = parseFloat(document.getElementById('acc-initial').value) || 0;
 
   if (editingAccountId) {
-    const existing = allAccounts.find((a) => a.id === editingAccountId);
-    await dbPut('accounts', { ...existing, name, type, initial_balance });
+    await sbUpdate('accounts', editingAccountId, { name, type, initial_balance });
   } else {
-    await dbAdd('accounts', { name, type, initial_balance, is_archived: false });
+    await sbInsert('accounts', { name, type, initial_balance, is_archived: false });
   }
   cancelEditAccount();
   await refreshAll();
@@ -595,11 +694,7 @@ document.getElementById('action-sheet-edit').addEventListener('click', async () 
   if (newName === null) return;
   const trimmed = newName.trim();
   if (!trimmed) return;
-  if (kind === 'category') {
-    await dbPut('categories', { ...item, name: trimmed });
-  } else {
-    await dbPut('merchants', { ...item, name: trimmed });
-  }
+  await sbUpdate(kind === 'category' ? 'categories' : 'merchants', item.id, { name: trimmed });
   await refreshAll();
 });
 
@@ -609,11 +704,11 @@ document.getElementById('action-sheet-delete').addEventListener('click', async (
   if (kind === 'category') {
     const inUse = allTransactions.some((t) => t.categoryId === item.id);
     if (inUse && !confirm('這個分類已有交易使用，確定要刪除嗎？（交易紀錄會保留但顯示為未分類）')) return;
-    await dbDelete('categories', item.id);
+    await sbDeleteHard('categories', item.id);
   } else {
     const inUse = allTransactions.some((t) => t.merchantId === item.id);
     if (inUse && !confirm('這個商家已有交易使用，確定要刪除嗎？（交易紀錄會保留但顯示為不指定商家）')) return;
-    await dbDelete('merchants', item.id);
+    await sbDeleteHard('merchants', item.id);
   }
   await refreshAll();
 });
@@ -622,7 +717,7 @@ async function addCategory(type, inputId) {
   const input = document.getElementById(inputId);
   const name = input.value.trim();
   if (!name) return;
-  await dbAdd('categories', { name, type });
+  await sbInsert('categories', { name, type });
   input.value = '';
   await refreshAll();
 }
@@ -638,7 +733,7 @@ document.getElementById('add-merchant-btn').addEventListener('click', async () =
   const input = document.getElementById('new-merchant');
   const name = input.value.trim();
   if (!name) return;
-  await dbAdd('merchants', { name });
+  await sbInsert('merchants', { name });
   input.value = '';
   await refreshAll();
 });
@@ -658,11 +753,88 @@ function populateFilterSelectors() {
   catSel.value = currentCat;
 }
 
+/* ---------- 登入驗證 ---------- */
+function showAuthScreen() {
+  document.getElementById('screen-auth').style.display = 'block';
+  document.getElementById('app-shell').style.display = 'none';
+  document.getElementById('bottom-nav').style.display = 'none';
+  document.getElementById('logout-btn').style.display = 'none';
+}
+
+function showAppShell() {
+  document.getElementById('screen-auth').style.display = 'none';
+  document.getElementById('app-shell').style.display = 'block';
+  document.getElementById('bottom-nav').style.display = 'flex';
+  document.getElementById('logout-btn').style.display = 'inline-block';
+}
+
+function showAuthError(message) {
+  const el = document.getElementById('auth-error');
+  el.textContent = message;
+  el.style.display = 'block';
+}
+
+function clearAuthError() {
+  document.getElementById('auth-error').style.display = 'none';
+}
+
+document.getElementById('auth-login-btn').addEventListener('click', async () => {
+  clearAuthError();
+  const email = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  if (!email || !password) { showAuthError('請輸入Email和密碼'); return; }
+  const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if (error) showAuthError(error.message);
+});
+
+document.getElementById('auth-signup-btn').addEventListener('click', async () => {
+  clearAuthError();
+  const email = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  if (!email || !password) { showAuthError('請輸入Email和密碼'); return; }
+  if (password.length < 6) { showAuthError('密碼至少需要6碼'); return; }
+  const { data, error } = await supabaseClient.auth.signUp({ email, password });
+  if (error) { showAuthError(error.message); return; }
+  if (!data.session) {
+    showAuthError('註冊成功！請check信箱收確認信，點擊確認連結後再回來登入。');
+  }
+});
+
+document.getElementById('logout-btn').addEventListener('click', async () => {
+  await supabaseClient.auth.signOut();
+});
+
+let dataInitialized = false;
+
+async function initAppData() {
+  if (dataInitialized) return;
+  dataInitialized = true;
+  await openDB();
+  await seedDefaultsIfEmpty();
+  await refreshAll();
+  document.getElementById('tx-date').value = new Date().toISOString().slice(0, 10);
+}
+
+supabaseClient.auth.onAuthStateChange((event, session) => {
+  if (session) {
+    currentUserId = session.user.id;
+    showAppShell();
+    initAppData();
+  } else {
+    currentUserId = null;
+    dataInitialized = false;
+    showAuthScreen();
+  }
+});
+
 /* ---------- 離線狀態顯示 ---------- */
 function updateOnlineBadge() {
   document.getElementById('offline-badge').style.display = navigator.onLine ? 'none' : 'inline-block';
 }
-window.addEventListener('online', updateOnlineBadge);
+window.addEventListener('online', () => {
+  updateOnlineBadge();
+  if (dataInitialized) refreshAll();
+});
 window.addEventListener('offline', updateOnlineBadge);
 
 /* ---------- Service Worker 註冊 ---------- */
@@ -675,10 +847,4 @@ if ('serviceWorker' in navigator) {
 }
 
 /* ---------- 初始化 ---------- */
-(async function init() {
-  await openDB();
-  await seedDefaultsIfEmpty();
-  await refreshAll();
-  updateOnlineBadge();
-  document.getElementById('tx-date').value = new Date().toISOString().slice(0, 10);
-})();
+updateOnlineBadge();
