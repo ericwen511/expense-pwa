@@ -299,7 +299,7 @@ async function refreshAll() {
   renderCategoryScreen();
   renderAccountsScreen();
   populateFormSelectors();
-  populateFilterSelectors();
+  renderFilterChips();
 }
 
 function categoryName(id) {
@@ -358,17 +358,17 @@ function renderOverview() {
 /* ---------- 交易列表畫面 ---------- */
 function renderList() {
   const keyword = (document.getElementById('search-input').value || '').trim().toLowerCase();
-  const accFilter = document.getElementById('filter-account').value;
-  const catFilter = document.getElementById('filter-category').value;
 
   let filtered = allTransactions.filter((t) => {
-    if (accFilter) {
+    if (filterState.accountIds.length) {
       const matchesAccount = t.type === 'transfer'
-        ? (String(t.accountId) === accFilter || String(t.transferToAccountId) === accFilter)
-        : String(t.accountId) === accFilter;
+        ? (filterState.accountIds.includes(t.accountId) || filterState.accountIds.includes(t.transferToAccountId))
+        : filterState.accountIds.includes(t.accountId);
       if (!matchesAccount) return false;
     }
-    if (catFilter && String(t.categoryId) !== catFilter) return false;
+    if (filterState.categoryIds.length && !filterState.categoryIds.includes(t.categoryId)) return false;
+    if (filterState.amountMin !== null && t.amount < filterState.amountMin) return false;
+    if (filterState.amountMax !== null && t.amount > filterState.amountMax) return false;
     if (keyword) {
       const hay = ((t.note || '') + ' ' + categoryName(t.categoryId) + ' ' + merchantName(t.merchantId)).toLowerCase();
       if (!hay.includes(keyword)) return false;
@@ -444,8 +444,6 @@ function buildTxRow(t, showDelete) {
 }
 
 document.getElementById('search-input').addEventListener('input', renderList);
-document.getElementById('filter-account').addEventListener('change', renderList);
-document.getElementById('filter-category').addEventListener('change', renderList);
 
 /* ---------- 新增交易畫面 ---------- */
 function setTxType(type) {
@@ -738,20 +736,140 @@ document.getElementById('add-merchant-btn').addEventListener('click', async () =
   await refreshAll();
 });
 
-/* ---------- 篩選下拉選單 ---------- */
-function populateFilterSelectors() {
-  const accSel = document.getElementById('filter-account');
-  const currentAcc = accSel.value;
-  accSel.innerHTML = '<option value="">全部帳戶</option>' +
-    allAccounts.map((a) => `<option value="${a.id}">${a.name}</option>`).join('');
-  accSel.value = currentAcc;
+/* ---------- 進階篩選 ---------- */
+let filterState = { accountIds: [], categoryIds: [], amountMin: null, amountMax: null };
 
-  const catSel = document.getElementById('filter-category');
-  const currentCat = catSel.value;
-  catSel.innerHTML = '<option value="">全部分類</option>' +
-    allCategories.map((c) => `<option value="${c.id}">${c.name}</option>`).join('');
-  catSel.value = currentCat;
+document.getElementById('toggle-advanced-filter').addEventListener('click', () => {
+  const panel = document.getElementById('advanced-filter-panel');
+  const btn = document.getElementById('toggle-advanced-filter');
+  const isOpen = panel.style.display === 'block';
+  panel.style.display = isOpen ? 'none' : 'block';
+  btn.textContent = isOpen ? '進階篩選 ▾' : '進階篩選 ▴';
+});
+
+function toggleFilterValue(arr, value) {
+  const idx = arr.indexOf(value);
+  if (idx >= 0) arr.splice(idx, 1);
+  else arr.push(value);
 }
+
+function renderFilterChips() {
+  const accWrap = document.getElementById('filter-account-chips');
+  accWrap.innerHTML = '';
+  allAccounts.forEach((a) => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'chip-btn' + (filterState.accountIds.includes(a.id) ? ' active' : '');
+    chip.textContent = a.name;
+    chip.addEventListener('click', () => {
+      toggleFilterValue(filterState.accountIds, a.id);
+      renderFilterChips();
+      renderList();
+    });
+    accWrap.appendChild(chip);
+  });
+
+  const catWrap = document.getElementById('filter-category-chips');
+  catWrap.innerHTML = '';
+  allCategories.forEach((c) => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'chip-btn' + (filterState.categoryIds.includes(c.id) ? ' active' : '');
+    chip.textContent = c.name;
+    chip.addEventListener('click', () => {
+      toggleFilterValue(filterState.categoryIds, c.id);
+      renderFilterChips();
+      renderList();
+    });
+    catWrap.appendChild(chip);
+  });
+
+  renderPresetChips();
+}
+
+document.getElementById('filter-amount-min').addEventListener('input', (e) => {
+  filterState.amountMin = e.target.value === '' ? null : parseFloat(e.target.value);
+  renderList();
+});
+document.getElementById('filter-amount-max').addEventListener('input', (e) => {
+  filterState.amountMax = e.target.value === '' ? null : parseFloat(e.target.value);
+  renderList();
+});
+
+document.getElementById('filter-clear-btn').addEventListener('click', () => {
+  filterState = { accountIds: [], categoryIds: [], amountMin: null, amountMax: null };
+  document.getElementById('filter-amount-min').value = '';
+  document.getElementById('filter-amount-max').value = '';
+  renderFilterChips();
+  renderList();
+});
+
+/* 常用篩選組合：只是畫面上的方便功能，存在本機localStorage即可，不需要另建Supabase表 */
+function presetStorageKey() {
+  return 'expensePwa_filterPresets_' + currentUserId;
+}
+
+function loadPresets() {
+  try {
+    return JSON.parse(localStorage.getItem(presetStorageKey()) || '[]');
+  } catch (e) {
+    return [];
+  }
+}
+
+function savePresets(presets) {
+  localStorage.setItem(presetStorageKey(), JSON.stringify(presets));
+}
+
+function renderPresetChips() {
+  const wrap = document.getElementById('filter-preset-list');
+  wrap.innerHTML = '';
+  loadPresets().forEach((preset, idx) => {
+    const chip = document.createElement('span');
+    chip.className = 'chip-btn preset-chip';
+
+    const label = document.createElement('span');
+    label.textContent = preset.name;
+    label.addEventListener('click', () => {
+      filterState = {
+        accountIds: preset.accountIds || [],
+        categoryIds: preset.categoryIds || [],
+        amountMin: preset.amountMin ?? null,
+        amountMax: preset.amountMax ?? null
+      };
+      document.getElementById('filter-amount-min').value = filterState.amountMin ?? '';
+      document.getElementById('filter-amount-max').value = filterState.amountMax ?? '';
+      renderFilterChips();
+      renderList();
+    });
+
+    const removeBtn = document.createElement('span');
+    removeBtn.className = 'preset-remove';
+    removeBtn.textContent = '×';
+    removeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const presets = loadPresets();
+      presets.splice(idx, 1);
+      savePresets(presets);
+      renderPresetChips();
+    });
+
+    chip.appendChild(label);
+    chip.appendChild(removeBtn);
+    wrap.appendChild(chip);
+  });
+}
+
+document.getElementById('filter-save-preset-btn').addEventListener('click', () => {
+  const nameInput = document.getElementById('filter-preset-name');
+  const name = nameInput.value.trim();
+  if (!name) return;
+  const presets = loadPresets();
+  presets.push({ name, ...filterState });
+  savePresets(presets);
+  nameInput.value = '';
+  renderPresetChips();
+});
 
 /* ---------- 登入驗證 ---------- */
 function showAuthScreen() {
@@ -793,7 +911,11 @@ document.getElementById('auth-signup-btn').addEventListener('click', async () =>
   const password = document.getElementById('auth-password').value;
   if (!email || !password) { showAuthError('請輸入Email和密碼'); return; }
   if (password.length < 6) { showAuthError('密碼至少需要6碼'); return; }
-  const { data, error } = await supabaseClient.auth.signUp({ email, password });
+  const { data, error } = await supabaseClient.auth.signUp({
+    email,
+    password,
+    options: { emailRedirectTo: window.location.origin }
+  });
   if (error) { showAuthError(error.message); return; }
   if (!data.session) {
     showAuthError('註冊成功！請check信箱收確認信，點擊確認連結後再回來登入。');

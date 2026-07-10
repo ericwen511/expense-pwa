@@ -64,10 +64,33 @@
     <div class="search-box">
       <input type="text" id="search-input" placeholder="搜尋備註、分類..." />
     </div>
-    <div class="filter-row">
-      <select id="filter-account"><option value="">全部帳戶</option></select>
-      <select id="filter-category"><option value="">全部分類</option></select>
+
+    <button type="button" id="toggle-advanced-filter" class="ghost-btn-full">進階篩選 ▾</button>
+
+    <div id="advanced-filter-panel" class="advanced-filter-panel" style="display:none;">
+      <p class="filter-group-label">帳戶（可複選）</p>
+      <div id="filter-account-chips" class="chip-group"></div>
+
+      <p class="filter-group-label">分類（可複選）</p>
+      <div id="filter-category-chips" class="chip-group"></div>
+
+      <p class="filter-group-label">金額範圍</p>
+      <div class="amount-range-row">
+        <input type="number" id="filter-amount-min" placeholder="最低" />
+        <span>～</span>
+        <input type="number" id="filter-amount-max" placeholder="最高" />
+      </div>
+
+      <button type="button" id="filter-clear-btn" class="ghost-btn-full">清除篩選</button>
+
+      <p class="filter-group-label" style="margin-top:16px;">儲存這組篩選</p>
+      <div class="inline-row">
+        <input type="text" id="filter-preset-name" placeholder="篩選名稱（例如：週末外食）" />
+        <button type="button" id="filter-save-preset-btn" class="primary-btn small">儲存</button>
+      </div>
+      <div id="filter-preset-list" class="chip-group"></div>
     </div>
+
     <div id="full-list" class="tx-list"></div>
     <p class="empty-hint" id="list-empty" style="display:none;">找不到符合的紀錄。</p>
   </section>
