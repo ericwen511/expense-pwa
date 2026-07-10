@@ -1,6 +1,6 @@
 {
-  "name": "個人記帳",
-  "short_name": "記帳",
+  "name": "財智管家 FinPilot",
+  "short_name": "財智管家",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
