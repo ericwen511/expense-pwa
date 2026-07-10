@@ -56,8 +56,23 @@ async function sbGetAll(table) {
   return data;
 }
 
+async function sbGetAllInLedger(table) {
+  const { data, error } = await supabaseClient.from(table).select('*').eq('ledger_id', currentLedgerId);
+  if (error) throw error;
+  return data;
+}
+
 async function sbCount(table) {
   const { count, error } = await supabaseClient.from(table).select('*', { count: 'exact', head: true });
+  if (error) throw error;
+  return count || 0;
+}
+
+async function sbCountInLedger(table) {
+  const { count, error } = await supabaseClient
+    .from(table)
+    .select('*', { count: 'exact', head: true })
+    .eq('ledger_id', currentLedgerId);
   if (error) throw error;
   return count || 0;
 }
@@ -90,7 +105,8 @@ function txToRow(t) {
     transfer_to_account_id: t.transferToAccountId || null,
     transaction_date: t.date,
     note: t.note || null,
-    client_generated_id: t.clientGeneratedId
+    client_generated_id: t.clientGeneratedId,
+    ledger_id: t.ledgerId
   };
 }
 
@@ -106,6 +122,7 @@ function txFromRow(row) {
     date: row.transaction_date,
     note: row.note || '',
     clientGeneratedId: row.client_generated_id,
+    ledgerId: row.ledger_id,
     createdAt: row.created_at
   };
 }
@@ -129,9 +146,19 @@ async function sbSoftDeleteTransaction(id) {
 }
 
 async function sbGetAllTransactions() {
-  const { data, error } = await supabaseClient.from('transactions').select('*').is('deleted_at', null);
+  const { data, error } = await supabaseClient
+    .from('transactions')
+    .select('*')
+    .eq('ledger_id', currentLedgerId)
+    .is('deleted_at', null);
   if (error) throw error;
   return data.map(txFromRow);
+}
+
+async function sbGetAllLedgers() {
+  const { data, error } = await supabaseClient.from('ledgers').select('*').order('created_at');
+  if (error) throw error;
+  return data;
 }
 
 /* 離線時新增的交易先進本機佇列，恢復連線後再補上傳 */
@@ -152,7 +179,7 @@ async function flushPendingQueue() {
   }
 }
 
-/* ---------- 預設資料（僅第一次使用時建立） ---------- */
+/* ---------- 預設資料（分類/商家：每個帳號只建一次，不分帳本） ---------- */
 async function seedDefaultsIfEmpty() {
   const catCount = await sbCount('categories');
   if (catCount === 0) {
@@ -168,21 +195,138 @@ async function seedDefaultsIfEmpty() {
     for (const c of defaults) await sbInsert('categories', c);
   }
 
-  const accCount = await sbCount('accounts');
+  const merchantCount = await sbCount('merchants');
+  if (merchantCount === 0) {
+    const defaults = ['全聯', '星巴克', '萬家福', '樂家康'];
+    for (const name of defaults) await sbInsert('merchants', { name });
+  }
+}
+
+/* 帳戶：每本帳本各自的預設資料，新帳本第一次使用時建立 */
+async function seedAccountsForCurrentLedger() {
+  const accCount = await sbCountInLedger('accounts');
   if (accCount === 0) {
     const defaults = [
       { name: '現金', type: 'cash' },
       { name: '銀行帳戶', type: 'bank' },
       { name: '信用卡', type: 'credit_card' }
     ];
-    for (const a of defaults) await sbInsert('accounts', { ...a, initial_balance: 0, is_archived: false });
+    for (const a of defaults) {
+      await sbInsert('accounts', { ...a, initial_balance: 0, is_archived: false, ledger_id: currentLedgerId });
+    }
   }
+}
 
-  const merchantCount = await sbCount('merchants');
-  if (merchantCount === 0) {
-    const defaults = ['全聯', '星巴克', '萬家福', '樂家康'];
-    for (const name of defaults) await sbInsert('merchants', { name });
+/* ---------- 帳本(ledgers)：同一帳號可切換多本互相隔離的帳 ---------- */
+let currentLedgerId = null;
+let allLedgers = [];
+
+function ledgerStorageKey() {
+  return 'expensePwa_currentLedger_' + currentUserId;
+}
+
+async function initLedgers() {
+  allLedgers = await sbGetAllLedgers();
+  if (!allLedgers.length) {
+    const inserted = await sbInsert('ledgers', { name: '個人', currency: 'TWD', is_archived: false });
+    allLedgers = [inserted];
   }
+  const saved = localStorage.getItem(ledgerStorageKey());
+  const active = allLedgers.filter((l) => !l.is_archived);
+  const found = allLedgers.find((l) => l.id === saved && !l.is_archived);
+  currentLedgerId = found ? found.id : (active[0] || allLedgers[0]).id;
+  localStorage.setItem(ledgerStorageKey(), currentLedgerId);
+}
+
+async function reloadLedgers() {
+  allLedgers = await sbGetAllLedgers();
+  renderLedgerSelect();
+  renderLedgerManagement();
+}
+
+function renderLedgerSelect() {
+  const sel = document.getElementById('ledger-select');
+  const active = allLedgers.filter((l) => !l.is_archived);
+  sel.innerHTML = active.map((l) => `<option value="${l.id}">${l.name}</option>`).join('');
+  sel.value = currentLedgerId;
+}
+
+async function switchLedger(ledgerId) {
+  currentLedgerId = ledgerId;
+  localStorage.setItem(ledgerStorageKey(), currentLedgerId);
+  await seedAccountsForCurrentLedger();
+  await refreshAll();
+  renderLedgerSelect();
+}
+
+document.getElementById('ledger-select').addEventListener('change', (e) => {
+  switchLedger(e.target.value);
+});
+
+document.getElementById('ledger-add-btn').addEventListener('click', async () => {
+  const name = prompt('新帳本名稱（例如：家庭共同基金）');
+  if (name === null) return;
+  const trimmed = name.trim();
+  if (!trimmed) return;
+  const inserted = await sbInsert('ledgers', { name: trimmed, currency: 'TWD', is_archived: false });
+  allLedgers.push(inserted);
+  await switchLedger(inserted.id);
+  renderLedgerManagement();
+});
+
+function renderLedgerManagement() {
+  const list = document.getElementById('ledger-list');
+  list.innerHTML = '';
+
+  allLedgers.forEach((l) => {
+    const row = document.createElement('div');
+    row.className = 'account-row' + (l.is_archived ? ' archived' : '');
+
+    const info = document.createElement('div');
+    info.className = 'account-info';
+    const name = document.createElement('p');
+    name.className = 'account-name';
+    name.textContent = l.name + (l.is_archived ? '（已封存）' : '') + (l.id === currentLedgerId ? '（使用中）' : '');
+    info.appendChild(name);
+
+    const actions = document.createElement('div');
+    actions.className = 'cat-actions';
+
+    const editBtn = document.createElement('button');
+    editBtn.textContent = '編輯';
+    editBtn.addEventListener('click', async () => {
+      const newName = prompt('修改帳本名稱', l.name);
+      if (newName === null) return;
+      const trimmed = newName.trim();
+      if (!trimmed) return;
+      await sbUpdate('ledgers', l.id, { name: trimmed });
+      await reloadLedgers();
+    });
+    actions.appendChild(editBtn);
+
+    const toggleBtn = document.createElement('button');
+    toggleBtn.textContent = l.is_archived ? '啟用' : '封存';
+    toggleBtn.addEventListener('click', async () => {
+      const willArchive = !l.is_archived;
+      const activeCount = allLedgers.filter((x) => !x.is_archived).length;
+      if (willArchive && activeCount <= 1) {
+        alert('至少要保留一本啟用中的帳本');
+        return;
+      }
+      await sbUpdate('ledgers', l.id, { is_archived: willArchive });
+      if (willArchive && l.id === currentLedgerId) {
+        allLedgers = await sbGetAllLedgers();
+        const nextActive = allLedgers.find((x) => !x.is_archived);
+        await switchLedger(nextActive.id);
+      }
+      await reloadLedgers();
+    });
+    actions.appendChild(toggleBtn);
+
+    row.appendChild(info);
+    row.appendChild(actions);
+    list.appendChild(row);
+  });
 }
 
 /* ---------- 全域狀態 ---------- */
@@ -282,14 +426,16 @@ async function refreshAll() {
   await flushPendingQueue();
 
   allCategories = await sbGetAll('categories');
-  allAccounts = await sbGetAll('accounts');
+  allAccounts = await sbGetAllInLedger('accounts');
   allMerchants = await sbGetAll('merchants');
   const synced = await sbGetAllTransactions();
-  const pending = (await idbGetAll('pending_transactions')).map((p) => ({
-    ...p,
-    id: 'pending-' + p.clientGeneratedId,
-    pending: true
-  }));
+  const pending = (await idbGetAll('pending_transactions'))
+    .filter((p) => p.ledgerId === currentLedgerId)
+    .map((p) => ({
+      ...p,
+      id: 'pending-' + p.clientGeneratedId,
+      pending: true
+    }));
   allTransactions = synced.concat(pending);
   allTransactions.sort((a, b) => (b.date + b.createdAt).localeCompare(a.date + a.createdAt));
 
@@ -297,6 +443,7 @@ async function refreshAll() {
   renderList();
   renderCategoryScreen();
   renderAccountsScreen();
+  renderLedgerManagement();
   populateFormSelectors();
   renderFilterChips();
 }
@@ -710,6 +857,7 @@ document.getElementById('tx-form').addEventListener('submit', async (e) => {
   }
 
   record.clientGeneratedId = crypto.randomUUID();
+  record.ledgerId = currentLedgerId;
   try {
     await sbInsertTransaction(txToRow(record));
   } catch (err) {
@@ -802,7 +950,7 @@ document.getElementById('account-form').addEventListener('submit', async (e) => 
   if (editingAccountId) {
     await sbUpdate('accounts', editingAccountId, { name, type, initial_balance });
   } else {
-    await sbInsert('accounts', { name, type, initial_balance, is_archived: false });
+    await sbInsert('accounts', { name, type, initial_balance, is_archived: false, ledger_id: currentLedgerId });
   }
   cancelEditAccount();
   await refreshAll();
@@ -993,7 +1141,8 @@ document.getElementById('import-json-input').addEventListener('change', async (e
         name: a.name,
         type: a.type,
         initial_balance: a.initial_balance || 0,
-        is_archived: !!a.is_archived
+        is_archived: !!a.is_archived,
+        ledger_id: currentLedgerId
       });
       accountIdMap[a.id] = inserted.id;
     }
@@ -1030,7 +1179,8 @@ document.getElementById('import-json-input').addEventListener('change', async (e
         transferToAccountId: t.transferToAccountId ? (accountIdMap[t.transferToAccountId] || null) : null,
         date: t.date,
         note: t.note || '',
-        clientGeneratedId: t.clientGeneratedId || crypto.randomUUID()
+        clientGeneratedId: t.clientGeneratedId || crypto.randomUUID(),
+        ledgerId: currentLedgerId
       });
       if (!row.account_id) continue;
       try {
@@ -1219,6 +1369,7 @@ function showAuthScreen() {
   document.getElementById('app-shell').style.display = 'none';
   document.getElementById('bottom-nav').style.display = 'none';
   document.getElementById('logout-btn').style.display = 'none';
+  document.getElementById('ledger-bar').style.display = 'none';
 }
 
 function showAppShell() {
@@ -1227,6 +1378,7 @@ function showAppShell() {
   document.getElementById('app-shell').style.display = 'block';
   document.getElementById('bottom-nav').style.display = 'flex';
   document.getElementById('logout-btn').style.display = 'inline-block';
+  document.getElementById('ledger-bar').style.display = 'flex';
 }
 
 function showResetPasswordScreen() {
@@ -1234,6 +1386,7 @@ function showResetPasswordScreen() {
   document.getElementById('app-shell').style.display = 'none';
   document.getElementById('bottom-nav').style.display = 'none';
   document.getElementById('logout-btn').style.display = 'none';
+  document.getElementById('ledger-bar').style.display = 'none';
   document.getElementById('screen-reset-password').style.display = 'block';
 }
 
@@ -1316,6 +1469,9 @@ async function initAppData() {
   dataInitialized = true;
   await openDB();
   await seedDefaultsIfEmpty();
+  await initLedgers();
+  await seedAccountsForCurrentLedger();
+  renderLedgerSelect();
   await refreshAll();
   document.getElementById('tx-date').value = new Date().toISOString().slice(0, 10);
 }

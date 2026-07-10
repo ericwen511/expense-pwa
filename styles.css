@@ -68,6 +68,34 @@ body {
   padding: 16px;
 }
 
+.ledger-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 10px 16px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+
+.ledger-bar select {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.ledger-add-btn {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: var(--radius);
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 16px;
+}
+
 .auth-error {
   color: var(--expense);
   font-size: 13px;
@@ -516,6 +544,8 @@ label {
   .badge { font-size: 16px; padding: 5px 13px; }
   .logout-btn { font-size: 15px; padding: 5px 13px; }
   .auth-error { font-size: 16px; }
+  .ledger-bar select { font-size: 17px; }
+  .ledger-add-btn { width: 40px; height: 40px; font-size: 19px; }
 
   .month-nav-btn { width: 38px; height: 38px; font-size: 19px; }
   .year-select, .month-select { font-size: 19px; }

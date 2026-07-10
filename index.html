@@ -20,6 +20,11 @@
   </div>
 </header>
 
+<div class="ledger-bar" id="ledger-bar" style="display:none;">
+  <select id="ledger-select"></select>
+  <button type="button" id="ledger-add-btn" class="ledger-add-btn">＋</button>
+</div>
+
 <!-- 登入/註冊 -->
 <section id="screen-auth" class="auth-screen">
   <p class="section-title">登入個人記帳</p>
@@ -236,7 +241,11 @@
 
   <!-- 分類管理 -->
   <section id="screen-categories" class="screen">
-    <p class="section-title">支出分類</p>
+    <p class="section-title">帳本管理</p>
+    <p class="hint-text">分類、商家是所有帳本共用的，只有帳戶跟交易分開</p>
+    <div id="ledger-list" class="account-list"></div>
+
+    <p class="section-title" style="margin-top:20px;">支出分類</p>
     <p class="hint-text">點選項目後方「⋯」可修改或刪除（手機也可長按）</p>
     <div id="expense-cat-list" class="cat-list"></div>
     <div class="add-cat-row">
