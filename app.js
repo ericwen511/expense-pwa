@@ -228,7 +228,7 @@ function ledgerStorageKey() {
 async function initLedgers() {
   allLedgers = await sbGetAllLedgers();
   if (!allLedgers.length) {
-    const inserted = await sbInsert('ledgers', { name: '個人', currency: 'TWD', is_archived: false });
+    const inserted = await sbInsert('ledgers', { name: '個人帳本', currency: 'TWD', is_archived: false });
     allLedgers = [inserted];
   }
   const saved = localStorage.getItem(ledgerStorageKey());
