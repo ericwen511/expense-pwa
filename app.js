@@ -350,12 +350,144 @@ function renderOverview() {
   list.innerHTML = '';
   document.getElementById('overview-empty').style.display = monthTx.length ? 'none' : 'block';
   monthTx.forEach((t) => list.appendChild(buildTxRow(t, false)));
+
+  renderCategoryChart(monthTx);
 }
+
+/* ---------- 分類佔比圖表 ---------- */
+let chartType = 'pie';
+const CHART_COLORS = ['#0F6E56', '#D85A30', '#E8A33D', '#3B6D11', '#6B5CA5', '#2E86AB', '#C2185B', '#8D6E63', '#607D8B', '#F4A261'];
+
+function renderCategoryChart(monthTx) {
+  const expenseTx = monthTx.filter((t) => t.type === 'expense');
+  const totals = {};
+  expenseTx.forEach((t) => {
+    const key = t.categoryId || 'none';
+    totals[key] = (totals[key] || 0) + t.amount;
+  });
+
+  const entries = Object.entries(totals)
+    .map(([catId, amount]) => ({ name: categoryName(catId === 'none' ? null : catId), amount }))
+    .sort((a, b) => b.amount - a.amount);
+
+  const container = document.getElementById('category-chart');
+  container.innerHTML = '';
+
+  if (!entries.length) {
+    container.innerHTML = '<p class="empty-hint" style="margin-top:0;">這個月還沒有支出紀錄</p>';
+    return;
+  }
+
+  const total = entries.reduce((s, e) => s + e.amount, 0);
+  container.appendChild(chartType === 'pie' ? buildPieChart(entries, total) : buildBarChart(entries, total));
+}
+
+function buildPieChart(entries, total) {
+  const size = 160, r = 60, cx = size / 2, cy = size / 2;
+  const circumference = 2 * Math.PI * r;
+  let offsetDeg = -90;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'pie-chart-wrap';
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
+  svg.setAttribute('width', size);
+  svg.setAttribute('height', size);
+
+  entries.forEach((e, i) => {
+    const pct = e.amount / total;
+    const dash = pct * circumference;
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('cx', cx);
+    circle.setAttribute('cy', cy);
+    circle.setAttribute('r', r);
+    circle.setAttribute('fill', 'none');
+    circle.setAttribute('stroke', CHART_COLORS[i % CHART_COLORS.length]);
+    circle.setAttribute('stroke-width', 24);
+    circle.setAttribute('stroke-dasharray', `${dash} ${circumference - dash}`);
+    circle.setAttribute('transform', `rotate(${offsetDeg} ${cx} ${cy})`);
+    svg.appendChild(circle);
+    offsetDeg += pct * 360;
+  });
+
+  wrap.appendChild(svg);
+  wrap.appendChild(buildChartLegend(entries, total));
+  return wrap;
+}
+
+function buildBarChart(entries, total) {
+  const wrap = document.createElement('div');
+  wrap.className = 'bar-chart-wrap';
+  const max = entries[0].amount;
+
+  entries.forEach((e, i) => {
+    const row = document.createElement('div');
+    row.className = 'bar-row';
+
+    const label = document.createElement('span');
+    label.className = 'bar-label';
+    label.textContent = e.name;
+
+    const track = document.createElement('div');
+    track.className = 'bar-track';
+    const fill = document.createElement('div');
+    fill.className = 'bar-fill';
+    fill.style.width = (e.amount / max * 100) + '%';
+    fill.style.background = CHART_COLORS[i % CHART_COLORS.length];
+    track.appendChild(fill);
+
+    const value = document.createElement('span');
+    value.className = 'bar-value';
+    value.textContent = fmtMoney(e.amount);
+
+    row.appendChild(label);
+    row.appendChild(track);
+    row.appendChild(value);
+    wrap.appendChild(row);
+  });
+
+  return wrap;
+}
+
+function buildChartLegend(entries, total) {
+  const legend = document.createElement('div');
+  legend.className = 'chart-legend';
+  entries.forEach((e, i) => {
+    const item = document.createElement('div');
+    item.className = 'legend-item';
+    const dot = document.createElement('span');
+    dot.className = 'legend-dot';
+    dot.style.background = CHART_COLORS[i % CHART_COLORS.length];
+    const text = document.createElement('span');
+    const pct = Math.round((e.amount / total) * 100);
+    text.textContent = `${e.name} ${pct}% (${fmtMoney(e.amount)})`;
+    item.appendChild(dot);
+    item.appendChild(text);
+    legend.appendChild(item);
+  });
+  return legend;
+}
+
+document.getElementById('chart-pie-btn').addEventListener('click', () => {
+  chartType = 'pie';
+  document.getElementById('chart-pie-btn').classList.add('active');
+  document.getElementById('chart-bar-btn').classList.remove('active');
+  renderOverview();
+});
+document.getElementById('chart-bar-btn').addEventListener('click', () => {
+  chartType = 'bar';
+  document.getElementById('chart-bar-btn').classList.add('active');
+  document.getElementById('chart-pie-btn').classList.remove('active');
+  renderOverview();
+});
 
 function shiftOverviewMonth(delta) {
   const [y, m] = overviewYearMonth.split('-').map(Number);
   const d = new Date(y, m - 1 + delta, 1);
-  overviewYearMonth = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  const next = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  if (next < '2023-01') return;
+  overviewYearMonth = next;
   renderOverview();
 }
 
@@ -373,6 +505,7 @@ function renderList() {
   const keyword = (document.getElementById('search-input').value || '').trim().toLowerCase();
 
   let filtered = allTransactions.filter((t) => {
+    if (filterState.merchantIds.length && !filterState.merchantIds.includes(t.merchantId)) return false;
     if (filterState.accountIds.length) {
       const matchesAccount = t.type === 'transfer'
         ? (filterState.accountIds.includes(t.accountId) || filterState.accountIds.includes(t.transferToAccountId))
@@ -751,8 +884,129 @@ document.getElementById('add-merchant-btn').addEventListener('click', async () =
   await refreshAll();
 });
 
+/* ---------- 資料備份：JSON匯出入 / CSV匯出 ---------- */
+function downloadFile(filename, content, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+document.getElementById('export-json-btn').addEventListener('click', () => {
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    accounts: allAccounts,
+    categories: allCategories,
+    merchants: allMerchants,
+    transactions: allTransactions.filter((t) => !t.pending)
+  };
+  downloadFile(
+    '記帳備份_' + new Date().toISOString().slice(0, 10) + '.json',
+    JSON.stringify(payload, null, 2),
+    'application/json'
+  );
+});
+
+document.getElementById('export-csv-btn').addEventListener('click', () => {
+  const header = ['日期', '類型', '金額', '分類', '帳戶', '商家', '備註'];
+  const rows = allTransactions
+    .filter((t) => !t.pending)
+    .map((t) => [
+      t.date,
+      t.type === 'expense' ? '支出' : t.type === 'income' ? '收入' : '轉帳',
+      t.amount,
+      t.type === 'transfer' ? '' : categoryName(t.categoryId),
+      t.type === 'transfer' ? (accountName(t.accountId) + '→' + accountName(t.transferToAccountId)) : accountName(t.accountId),
+      merchantName(t.merchantId),
+      (t.note || '').replace(/"/g, '""')
+    ]);
+  const csv = [header, ...rows].map((row) => row.map((cell) => `"${cell}"`).join(',')).join('\n');
+  const bom = String.fromCharCode(0xFEFF);
+  downloadFile('記帳明細_' + new Date().toISOString().slice(0, 10) + '.csv', bom + csv, 'text/csv;charset=utf-8');
+});
+
+document.getElementById('import-json-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  e.target.value = '';
+
+  if (!confirm('匯入會把備份裡的帳戶/分類/商家/交易新增到目前帳號，確定要匯入嗎？')) return;
+
+  try {
+    const data = JSON.parse(await file.text());
+
+    const accountIdMap = {};
+    for (const a of (data.accounts || [])) {
+      const existing = allAccounts.find((x) => x.name === a.name);
+      if (existing) {
+        accountIdMap[a.id] = existing.id;
+        continue;
+      }
+      const inserted = await sbInsert('accounts', {
+        name: a.name,
+        type: a.type,
+        initial_balance: a.initial_balance || 0,
+        is_archived: !!a.is_archived
+      });
+      accountIdMap[a.id] = inserted.id;
+    }
+
+    const categoryIdMap = {};
+    for (const c of (data.categories || [])) {
+      const existing = allCategories.find((x) => x.name === c.name && x.type === c.type);
+      if (existing) {
+        categoryIdMap[c.id] = existing.id;
+        continue;
+      }
+      const inserted = await sbInsert('categories', { name: c.name, type: c.type });
+      categoryIdMap[c.id] = inserted.id;
+    }
+
+    const merchantIdMap = {};
+    for (const m of (data.merchants || [])) {
+      const existing = allMerchants.find((x) => x.name === m.name);
+      if (existing) {
+        merchantIdMap[m.id] = existing.id;
+        continue;
+      }
+      const inserted = await sbInsert('merchants', { name: m.name });
+      merchantIdMap[m.id] = inserted.id;
+    }
+
+    for (const t of (data.transactions || [])) {
+      const row = txToRow({
+        type: t.type,
+        amount: t.amount,
+        categoryId: t.categoryId ? (categoryIdMap[t.categoryId] || null) : null,
+        accountId: accountIdMap[t.accountId] || null,
+        merchantId: t.merchantId ? (merchantIdMap[t.merchantId] || null) : null,
+        transferToAccountId: t.transferToAccountId ? (accountIdMap[t.transferToAccountId] || null) : null,
+        date: t.date,
+        note: t.note || '',
+        clientGeneratedId: t.clientGeneratedId || crypto.randomUUID()
+      });
+      if (!row.account_id) continue;
+      try {
+        await sbInsertTransaction(row);
+      } catch (err) {
+        if (!(err && err.code === '23505')) throw err;
+      }
+    }
+
+    await refreshAll();
+    alert('匯入完成！');
+  } catch (err) {
+    alert('匯入失敗：' + err.message);
+  }
+});
+
 /* ---------- 進階篩選 ---------- */
-let filterState = { accountIds: [], categoryIds: [], amountMin: null, amountMax: null, dateFrom: null, dateTo: null };
+let filterState = { merchantIds: [], accountIds: [], categoryIds: [], amountMin: null, amountMax: null, dateFrom: null, dateTo: null };
 
 document.getElementById('toggle-advanced-filter').addEventListener('click', () => {
   const panel = document.getElementById('advanced-filter-panel');
@@ -769,6 +1023,21 @@ function toggleFilterValue(arr, value) {
 }
 
 function renderFilterChips() {
+  const merchWrap = document.getElementById('filter-merchant-chips');
+  merchWrap.innerHTML = '';
+  allMerchants.forEach((m) => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'chip-btn' + (filterState.merchantIds.includes(m.id) ? ' active' : '');
+    chip.textContent = m.name;
+    chip.addEventListener('click', () => {
+      toggleFilterValue(filterState.merchantIds, m.id);
+      renderFilterChips();
+      renderList();
+    });
+    merchWrap.appendChild(chip);
+  });
+
   const accWrap = document.getElementById('filter-account-chips');
   accWrap.innerHTML = '';
   allAccounts.forEach((a) => {
@@ -820,7 +1089,7 @@ document.getElementById('filter-date-to').addEventListener('change', (e) => {
 });
 
 document.getElementById('filter-clear-btn').addEventListener('click', () => {
-  filterState = { accountIds: [], categoryIds: [], amountMin: null, amountMax: null, dateFrom: null, dateTo: null };
+  filterState = { merchantIds: [], accountIds: [], categoryIds: [], amountMin: null, amountMax: null, dateFrom: null, dateTo: null };
   document.getElementById('filter-amount-min').value = '';
   document.getElementById('filter-amount-max').value = '';
   document.getElementById('filter-date-from').value = '';
@@ -857,6 +1126,7 @@ function renderPresetChips() {
     label.textContent = preset.name;
     label.addEventListener('click', () => {
       filterState = {
+        merchantIds: preset.merchantIds || [],
         accountIds: preset.accountIds || [],
         categoryIds: preset.categoryIds || [],
         amountMin: preset.amountMin ?? null,
