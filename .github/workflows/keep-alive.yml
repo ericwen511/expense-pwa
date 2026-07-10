@@ -1,0 +1,23 @@
+name: Keep Supabase Alive
+
+on:
+  schedule:
+    # 每3天早上8點(UTC)執行一次，遠低於7天暫停門檻，留足夠緩衝
+    - cron: "0 8 */3 * *"
+  workflow_dispatch: {} # 允許在GitHub網頁上手動點擊執行，方便測試
+
+jobs:
+  ping-supabase:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 呼叫 Supabase REST API 保持專案活躍
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" \
+            "${{ secrets.SUPABASE_URL }}/rest/v1/" \
+            -H "apikey: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}")
+          echo "Supabase 回應狀態碼: $response"
+          if [ "$response" -ge 400 ]; then
+            echo "警告：回應狀態碼異常，請檢查 SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY 是否正確設定"
+            exit 1
+          fi

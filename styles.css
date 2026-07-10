@@ -1,0 +1,294 @@
+:root {
+  --primary: #0F6E56;
+  --primary-light: #E1F5EE;
+  --expense: #D85A30;
+  --expense-bg: #FAECE7;
+  --income: #3B6D11;
+  --income-bg: #EAF3DE;
+  --bg: #F7F7F5;
+  --card: #FFFFFF;
+  --text-primary: #222222;
+  --text-secondary: #6B6B68;
+  --text-muted: #9B9B97;
+  --border: #E5E5E2;
+  --radius: 10px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  background: var(--bg);
+  color: var(--text-primary);
+  padding-bottom: 76px;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.app-header h1 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.badge {
+  font-size: 12px;
+  background: #FAEEDA;
+  color: #854F0B;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.app-main {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.screen { display: none; }
+.screen.active { display: block; }
+
+.month-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 4px 0 12px;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.summary-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 12px 10px;
+  border: 1px solid var(--border);
+}
+
+.summary-label { font-size: 12px; color: var(--text-secondary); margin: 0 0 4px; }
+.summary-value { font-size: 17px; font-weight: 600; margin: 0; }
+.summary-value.expense { color: var(--expense); }
+.summary-value.income { color: var(--income); }
+
+.section-title { font-size: 14px; font-weight: 600; margin: 0 0 10px; }
+
+.tx-list { display: flex; flex-direction: column; }
+
+.tx-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  gap: 10px;
+}
+
+.tx-info { min-width: 0; }
+.tx-info p { margin: 0; }
+.tx-title { font-size: 15px; }
+.tx-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px !important; }
+
+.tx-amount { font-size: 15px; font-weight: 600; flex-shrink: 0; white-space: nowrap; }
+.tx-amount.expense { color: var(--expense); }
+.tx-amount.income { color: var(--income); }
+
+.tx-delete {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+.tx-delete:hover { color: var(--expense); }
+
+.date-group-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 14px 0 6px;
+}
+
+.empty-hint {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+  margin-top: 40px;
+}
+
+.search-box { margin-bottom: 10px; }
+.filter-row { display: flex; gap: 8px; margin-bottom: 14px; }
+.filter-row select { flex: 1; min-width: 0; }
+
+input, select, textarea, button {
+  font-family: inherit;
+  font-size: 14px;
+}
+
+input[type="text"], input[type="number"], input[type="date"], select, textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+textarea { resize: none; }
+
+label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.type-toggle { display: flex; gap: 8px; margin-bottom: 16px; }
+
+.type-btn {
+  flex: 1;
+  padding: 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.type-btn.active.expense-btn { background: var(--expense-bg); color: var(--expense); border-color: var(--expense-bg); }
+.type-btn.active.income-btn { background: var(--income-bg); color: var(--income); border-color: var(--income-bg); }
+
+.inline-row { display: flex; gap: 8px; align-items: flex-start; }
+.inline-row select { flex: 1; }
+
+.ghost-btn {
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: var(--radius);
+  width: 40px;
+  height: 40px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.primary-btn {
+  width: 100%;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  padding: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 6px;
+}
+
+.primary-btn.small { width: auto; padding: 10px 16px; margin-top: 0; }
+
+.cat-list { display: flex; flex-direction: column; margin-bottom: 12px; }
+
+.cat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.cat-actions button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-left: 10px;
+}
+.cat-actions button.delete { color: var(--expense); }
+
+.add-cat-row { display: flex; gap: 8px; }
+.add-cat-row input { margin-bottom: 0; }
+
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-around;
+  padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
+  z-index: 10;
+}
+
+.nav-btn {
+  background: none;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 4px 12px;
+}
+
+.nav-btn .icon { font-size: 20px; }
+.nav-btn.active { color: var(--primary); }
+
+@media (min-width: 600px) {
+  .app-main { padding: 24px; }
+  .bottom-nav { max-width: 480px; left: 50%; transform: translateX(-50%); border-radius: 16px 16px 0 0; border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
+}
+
+/* 手機上文字放大，方便閱讀（約為原始桌面尺寸的1.3倍） */
+@media (max-width: 599px) {
+  .app-header h1 { font-size: 24px; }
+  .badge { font-size: 16px; padding: 5px 13px; }
+
+  .month-label { font-size: 17px; }
+  .summary-grid { grid-template-columns: 1fr; }
+  .summary-label { font-size: 16px; }
+  .summary-value { font-size: 23px; }
+
+  .section-title { font-size: 19px; }
+
+  .tx-title { font-size: 20px; }
+  .tx-meta { font-size: 16px; }
+  .tx-amount { font-size: 20px; }
+  .tx-delete { font-size: 19px; padding: 5px 11px; }
+  .date-group-label { font-size: 16px; }
+  .empty-hint { font-size: 19px; }
+
+  input[type="text"], input[type="number"], input[type="date"], select, textarea, button {
+    font-size: 19px;
+    padding: 11px 12px;
+  }
+  label { font-size: 16px; margin-bottom: 5px; }
+  .ghost-btn { width: 37px; height: 37px; font-size: 19px; }
+  .primary-btn.small { padding: 11px 16px; }
+
+  .cat-row span { font-size: 20px; }
+  .cat-actions button { font-size: 19px; margin-left: 11px; }
+  .add-cat-row input { font-size: 19px; }
+
+  .nav-btn { font-size: 15px; padding: 6px 10px; }
+  .nav-btn .icon { font-size: 27px; }
+}
