@@ -751,6 +751,17 @@ function buildTxRow(t, showDelete) {
   row.appendChild(amount);
 
   if (showDelete) {
+    const actions = document.createElement('div');
+    actions.className = 'tx-actions';
+
+    if (!t.pending) {
+      const editBtn = document.createElement('button');
+      editBtn.className = 'tx-edit';
+      editBtn.textContent = '編輯';
+      editBtn.addEventListener('click', () => startEditTransaction(t));
+      actions.appendChild(editBtn);
+    }
+
     const delBtn = document.createElement('button');
     delBtn.className = 'tx-delete';
     delBtn.textContent = '刪除';
@@ -762,7 +773,9 @@ function buildTxRow(t, showDelete) {
       }
       await refreshAll();
     });
-    row.appendChild(delBtn);
+    actions.appendChild(delBtn);
+
+    row.appendChild(actions);
   }
 
   return row;
@@ -856,21 +869,78 @@ document.getElementById('tx-form').addEventListener('submit', async (e) => {
     };
   }
 
-  record.clientGeneratedId = crypto.randomUUID();
-  record.ledgerId = currentLedgerId;
-  try {
-    await sbInsertTransaction(txToRow(record));
-  } catch (err) {
-    await idbPut('pending_transactions', { ...record, createdAt: new Date().toISOString() });
+  if (editingTransactionId) {
+    const row = txToRow(record);
+    delete row.client_generated_id;
+    delete row.ledger_id;
+    await sbUpdate('transactions', editingTransactionId, row);
+  } else {
+    record.clientGeneratedId = crypto.randomUUID();
+    record.ledgerId = currentLedgerId;
+    try {
+      await sbInsertTransaction(txToRow(record));
+    } catch (err) {
+      await idbPut('pending_transactions', { ...record, createdAt: new Date().toISOString() });
+    }
   }
 
-  e.target.reset();
-  document.getElementById('tx-date').value = new Date().toISOString().slice(0, 10);
-  resetCalc();
-  setTxType('expense');
+  cancelEditTransaction();
   await refreshAll();
   switchTab('overview');
 });
+
+let editingTransactionId = null;
+
+/* 帳戶如果已經停用，新增交易的下拉選單裡不會有它；編輯舊交易時要補回去，
+   不然存檔會被悄悄改成別的帳戶 */
+function ensureAccountOption(selectEl, accountId) {
+  if (!accountId) return;
+  const exists = [...selectEl.options].some((o) => o.value === accountId);
+  if (!exists) {
+    const acc = allAccounts.find((a) => a.id === accountId);
+    if (acc) {
+      const opt = document.createElement('option');
+      opt.value = acc.id;
+      opt.textContent = acc.name + '（已停用）';
+      selectEl.appendChild(opt);
+    }
+  }
+}
+
+function startEditTransaction(t) {
+  editingTransactionId = t.id;
+  switchTab('add');
+  setTxType(t.type);
+  calcExpr = String(t.amount);
+  updateCalcDisplay();
+  document.getElementById('tx-date').value = t.date;
+  document.getElementById('tx-note').value = t.note || '';
+  if (t.type === 'transfer') {
+    ensureAccountOption(document.getElementById('tx-account'), t.accountId);
+    ensureAccountOption(document.getElementById('tx-transfer-to'), t.transferToAccountId);
+    document.getElementById('tx-account').value = t.accountId;
+    document.getElementById('tx-transfer-to').value = t.transferToAccountId;
+  } else {
+    document.getElementById('tx-category').value = t.categoryId;
+    ensureAccountOption(document.getElementById('tx-account'), t.accountId);
+    document.getElementById('tx-account').value = t.accountId;
+    document.getElementById('tx-merchant').value = t.merchantId || '';
+  }
+  document.getElementById('tx-form-submit').textContent = '更新交易';
+  document.getElementById('tx-form-cancel').style.display = 'block';
+}
+
+function cancelEditTransaction() {
+  editingTransactionId = null;
+  document.getElementById('tx-form').reset();
+  document.getElementById('tx-date').value = new Date().toISOString().slice(0, 10);
+  resetCalc();
+  setTxType('expense');
+  document.getElementById('tx-form-submit').textContent = '儲存';
+  document.getElementById('tx-form-cancel').style.display = 'none';
+}
+
+document.getElementById('tx-form-cancel').addEventListener('click', cancelEditTransaction);
 
 /* ---------- 帳戶管理畫面 ---------- */
 const accountTypeLabels = { cash: '現金', bank: '銀行帳戶', credit_card: '信用卡', other: '其他' };

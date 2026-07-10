@@ -186,7 +186,9 @@ body {
 .tx-amount.income { color: var(--income); }
 .tx-amount.transfer { color: var(--primary); }
 
-.tx-delete {
+.tx-actions { display: flex; gap: 2px; flex-shrink: 0; }
+
+.tx-delete, .tx-edit {
   flex-shrink: 0;
   background: none;
   border: none;
@@ -196,6 +198,7 @@ body {
   padding: 4px 8px;
 }
 .tx-delete:hover { color: var(--expense); }
+.tx-edit:hover { color: var(--primary); }
 
 .date-group-label {
   font-size: 12px;
@@ -558,7 +561,7 @@ label {
   .tx-title { font-size: 20px; }
   .tx-meta { font-size: 16px; }
   .tx-amount { font-size: 20px; }
-  .tx-delete { font-size: 19px; padding: 5px 11px; }
+  .tx-delete, .tx-edit { font-size: 19px; padding: 5px 11px; }
   .date-group-label { font-size: 16px; }
   .empty-hint { font-size: 19px; }
 
