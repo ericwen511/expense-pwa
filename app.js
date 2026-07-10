@@ -874,6 +874,7 @@ document.getElementById('filter-save-preset-btn').addEventListener('click', () =
 /* ---------- 登入驗證 ---------- */
 function showAuthScreen() {
   document.getElementById('screen-auth').style.display = 'block';
+  document.getElementById('screen-reset-password').style.display = 'none';
   document.getElementById('app-shell').style.display = 'none';
   document.getElementById('bottom-nav').style.display = 'none';
   document.getElementById('logout-btn').style.display = 'none';
@@ -881,9 +882,18 @@ function showAuthScreen() {
 
 function showAppShell() {
   document.getElementById('screen-auth').style.display = 'none';
+  document.getElementById('screen-reset-password').style.display = 'none';
   document.getElementById('app-shell').style.display = 'block';
   document.getElementById('bottom-nav').style.display = 'flex';
   document.getElementById('logout-btn').style.display = 'inline-block';
+}
+
+function showResetPasswordScreen() {
+  document.getElementById('screen-auth').style.display = 'none';
+  document.getElementById('app-shell').style.display = 'none';
+  document.getElementById('bottom-nav').style.display = 'none';
+  document.getElementById('logout-btn').style.display = 'none';
+  document.getElementById('screen-reset-password').style.display = 'block';
 }
 
 function showAuthError(message) {
@@ -922,6 +932,38 @@ document.getElementById('auth-signup-btn').addEventListener('click', async () =>
   }
 });
 
+document.getElementById('auth-forgot-btn').addEventListener('click', async () => {
+  clearAuthError();
+  const email = document.getElementById('auth-email').value.trim();
+  if (!email) { showAuthError('請先在Email欄位輸入你的信箱'); return; }
+  const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin
+  });
+  if (error) { showAuthError(error.message); return; }
+  showAuthError('重設密碼信已寄出，請check信箱並點擊連結設定新密碼。');
+});
+
+document.getElementById('reset-submit-btn').addEventListener('click', async () => {
+  const errorEl = document.getElementById('reset-error');
+  errorEl.style.display = 'none';
+  const newPassword = document.getElementById('reset-new-password').value;
+  if (newPassword.length < 6) {
+    errorEl.textContent = '密碼至少需要6碼';
+    errorEl.style.display = 'block';
+    return;
+  }
+  const { error } = await supabaseClient.auth.updateUser({ password: newPassword });
+  if (error) {
+    errorEl.textContent = error.message;
+    errorEl.style.display = 'block';
+    return;
+  }
+  document.getElementById('reset-new-password').value = '';
+  document.getElementById('screen-reset-password').style.display = 'none';
+  showAppShell();
+  initAppData();
+});
+
 document.getElementById('logout-btn').addEventListener('click', async () => {
   await supabaseClient.auth.signOut();
 });
@@ -938,6 +980,10 @@ async function initAppData() {
 }
 
 supabaseClient.auth.onAuthStateChange((event, session) => {
+  if (event === 'PASSWORD_RECOVERY') {
+    showResetPasswordScreen();
+    return;
+  }
   if (session) {
     currentUserId = session.user.id;
     showAppShell();
