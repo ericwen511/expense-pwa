@@ -168,6 +168,25 @@ async function sbGetAllTransactions() {
   return all.map(txFromRow);
 }
 
+/* 財富管家用：跨所有帳本抓取交易，才能算出全部現金/銀行帳戶的即時餘額 */
+async function sbGetAllTransactionsAllLedgers() {
+  const pageSize = 1000;
+  let from = 0;
+  let all = [];
+  while (true) {
+    const { data, error } = await supabaseClient
+      .from('transactions')
+      .select('*')
+      .is('deleted_at', null)
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    all = all.concat(data);
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+  return all.map(txFromRow);
+}
+
 async function sbUpsertBudget(yearMonth, amount) {
   const { data, error } = await supabaseClient
     .from('budgets')
@@ -415,8 +434,11 @@ let allAssets = [];
 let allAssetSnapshots = [];
 let allLiabilities = [];
 let allLiabilitySnapshots = [];
+let allWealthAccounts = [];
+let allWealthTransactions = [];
 const WEALTH_ASSET_CATEGORY_LABELS = { investment: '投資', real_estate: '不動產', insurance: '保單', other: '其他' };
 const WEALTH_LIABILITY_TYPE_LABELS = { mortgage: '房貸', car_loan: '車貸', credit_card: '信用卡', student_loan: '學貸', other: '其他' };
+const WEALTH_DONUT_COLORS = { cash: '#6E7C94', investment: '#C9A25D', real_estate: '#8DA37E', insurance: '#B5715A', other: '#5B6478' };
 
 document.getElementById('w-asset-date').value = todayDateStr();
 document.getElementById('w-liability-date').value = todayDateStr();
@@ -433,8 +455,221 @@ async function loadWealthData() {
     allLiabilities = [];
     allLiabilitySnapshots = [];
   }
+  try {
+    allWealthAccounts = await sbGetAll('accounts');
+    allWealthTransactions = await sbGetAllTransactionsAllLedgers();
+  } catch (err) {
+    allWealthAccounts = [];
+    allWealthTransactions = [];
+  }
   renderWealthAssetsScreen();
   renderWealthLiabilitiesScreen();
+  renderWealthOverview();
+}
+
+function computeWealthAccountBalance(accountId, initialBalance) {
+  let total = initialBalance || 0;
+  allWealthTransactions.forEach((t) => {
+    if (t.type === 'transfer') {
+      if (t.accountId === accountId) total -= t.amount;
+      if (t.transferToAccountId === accountId) total += (t.transferToAmount || t.amount);
+    } else if (t.accountId === accountId) {
+      total += (t.type === 'income' ? t.amount : -t.amount);
+    }
+  });
+  return total;
+}
+
+function renderWealthOverview() {
+  const activeAccounts = allWealthAccounts.filter((a) => !a.is_archived);
+  const twdCash = activeAccounts
+    .filter((a) => (a.currency || 'TWD') === 'TWD')
+    .reduce((sum, a) => sum + computeWealthAccountBalance(a.id, a.initial_balance), 0);
+
+  const activeAssets = allAssets.filter((a) => !a.is_archived);
+  const assetTotalsByCategory = { investment: 0, real_estate: 0, insurance: 0, other: 0 };
+  activeAssets.forEach((a) => {
+    if ((a.currency || 'TWD') !== 'TWD') return;
+    const snap = latestSnapshot(allAssetSnapshots, 'asset_id', a.id);
+    const value = snap ? Number(snap.value) : 0;
+    assetTotalsByCategory[a.category] = (assetTotalsByCategory[a.category] || 0) + value;
+  });
+
+  const activeLiabilities = allLiabilities.filter((l) => !l.is_archived);
+  const totalLiabilities = activeLiabilities.reduce((sum, l) => {
+    const snap = latestSnapshot(allLiabilitySnapshots, 'liability_id', l.id);
+    return sum + (snap ? Number(snap.remaining_balance) : 0);
+  }, 0);
+
+  const totalAssets = twdCash + assetTotalsByCategory.investment + assetTotalsByCategory.real_estate
+    + assetTotalsByCategory.insurance + assetTotalsByCategory.other;
+  const netWorth = totalAssets - totalLiabilities;
+  const debtRatio = totalAssets > 0 ? (totalLiabilities / totalAssets) * 100 : 0;
+
+  document.getElementById('w-net-worth').textContent = fmtMoney(netWorth);
+  document.getElementById('w-total-assets').textContent = fmtMoney(totalAssets);
+  document.getElementById('w-total-liabilities').textContent = fmtMoney(totalLiabilities);
+  document.getElementById('w-debt-ratio').textContent = debtRatio.toFixed(1) + '%';
+
+  const donutEntries = [
+    { key: 'cash', name: '現金', value: twdCash },
+    { key: 'investment', name: '投資', value: assetTotalsByCategory.investment },
+    { key: 'real_estate', name: '不動產', value: assetTotalsByCategory.real_estate },
+    { key: 'insurance', name: '保單', value: assetTotalsByCategory.insurance },
+    { key: 'other', name: '其他', value: assetTotalsByCategory.other }
+  ].filter((e) => e.value > 0);
+  renderWealthDonut(donutEntries, totalAssets);
+
+  renderWealthAccountList(activeAccounts);
+  renderWealthOverviewAssetList(activeAssets);
+  renderWealthOverviewLiabilityList(activeLiabilities);
+}
+
+function renderWealthDonut(entries, total) {
+  const donut = document.getElementById('w-donut');
+  const legend = document.getElementById('w-legend');
+  legend.innerHTML = '';
+
+  if (!total || !entries.length) {
+    donut.style.background = 'var(--w-hair)';
+    const hint = document.createElement('p');
+    hint.className = 'w-empty-hint';
+    hint.textContent = '尚無台幣資產資料';
+    legend.appendChild(hint);
+    return;
+  }
+
+  let cumulative = 0;
+  const stops = entries.map((e) => {
+    const start = cumulative;
+    cumulative += (e.value / total) * 360;
+    return `${WEALTH_DONUT_COLORS[e.key]} ${start}deg ${cumulative}deg`;
+  });
+  donut.style.background = `conic-gradient(${stops.join(', ')})`;
+
+  entries.forEach((e) => {
+    const item = document.createElement('div');
+    item.className = 'w-legend-item';
+
+    const label = document.createElement('span');
+    label.className = 'w-legend-label';
+    const dot = document.createElement('span');
+    dot.className = 'w-dot';
+    dot.style.background = WEALTH_DONUT_COLORS[e.key];
+    label.appendChild(dot);
+    label.appendChild(document.createTextNode(e.name));
+
+    const value = document.createElement('span');
+    value.className = 'w-legend-value';
+    const pct = Math.round((e.value / total) * 100);
+    value.textContent = `${pct}% · ${fmtMoney(e.value)}`;
+
+    item.appendChild(label);
+    item.appendChild(value);
+    legend.appendChild(item);
+  });
+}
+
+function renderWealthAccountList(activeAccounts) {
+  const container = document.getElementById('w-account-list');
+  container.innerHTML = '';
+  if (!activeAccounts.length) {
+    const hint = document.createElement('p');
+    hint.className = 'w-empty-hint';
+    hint.textContent = '記帳系統裡還沒有帳戶';
+    container.appendChild(hint);
+    return;
+  }
+  const ledgerNameMap = {};
+  allLedgers.forEach((l) => { ledgerNameMap[l.id] = l.name; });
+
+  activeAccounts.forEach((a) => {
+    const balance = computeWealthAccountBalance(a.id, a.initial_balance);
+    const row = document.createElement('div');
+    row.className = 'w-item-row';
+
+    const info = document.createElement('div');
+    const name = document.createElement('div');
+    name.className = 'w-item-name';
+    name.textContent = a.name;
+    const meta = document.createElement('div');
+    meta.className = 'w-item-meta';
+    meta.textContent = (ledgerNameMap[a.ledger_id] || '') + ' · ' + (accountTypeLabels[a.type] || a.type);
+    info.appendChild(name);
+    info.appendChild(meta);
+
+    const valueEl = document.createElement('div');
+    valueEl.className = 'w-item-value' + (balance < 0 ? ' w-negative' : '');
+    valueEl.textContent = fmtMoney(balance, a.currency);
+
+    row.appendChild(info);
+    row.appendChild(valueEl);
+    container.appendChild(row);
+  });
+}
+
+function renderWealthOverviewAssetList(activeAssets) {
+  const container = document.getElementById('w-asset-list');
+  container.innerHTML = '';
+  if (!activeAssets.length) {
+    const hint = document.createElement('p');
+    hint.className = 'w-empty-hint';
+    hint.textContent = '還沒有資產紀錄';
+    container.appendChild(hint);
+    return;
+  }
+  activeAssets.forEach((a) => {
+    const snap = latestSnapshot(allAssetSnapshots, 'asset_id', a.id);
+    const row = document.createElement('div');
+    row.className = 'w-item-row';
+    const info = document.createElement('div');
+    const name = document.createElement('div');
+    name.className = 'w-item-name';
+    name.textContent = a.name;
+    const meta = document.createElement('div');
+    meta.className = 'w-item-meta';
+    meta.textContent = (WEALTH_ASSET_CATEGORY_LABELS[a.category] || a.category) + (snap ? ' · 上次更新 ' + snap.snapshot_date : '');
+    info.appendChild(name);
+    info.appendChild(meta);
+    const valueEl = document.createElement('div');
+    valueEl.className = 'w-item-value';
+    valueEl.textContent = fmtMoney(snap ? Number(snap.value) : 0, a.currency);
+    row.appendChild(info);
+    row.appendChild(valueEl);
+    container.appendChild(row);
+  });
+}
+
+function renderWealthOverviewLiabilityList(activeLiabilities) {
+  const container = document.getElementById('w-liability-list');
+  container.innerHTML = '';
+  if (!activeLiabilities.length) {
+    const hint = document.createElement('p');
+    hint.className = 'w-empty-hint';
+    hint.textContent = '還沒有負債紀錄';
+    container.appendChild(hint);
+    return;
+  }
+  activeLiabilities.forEach((l) => {
+    const snap = latestSnapshot(allLiabilitySnapshots, 'liability_id', l.id);
+    const row = document.createElement('div');
+    row.className = 'w-item-row';
+    const info = document.createElement('div');
+    const name = document.createElement('div');
+    name.className = 'w-item-name';
+    name.textContent = l.name;
+    const meta = document.createElement('div');
+    meta.className = 'w-item-meta';
+    meta.textContent = (WEALTH_LIABILITY_TYPE_LABELS[l.type] || l.type) + (snap ? ' · 上次更新 ' + snap.snapshot_date : '');
+    info.appendChild(name);
+    info.appendChild(meta);
+    const valueEl = document.createElement('div');
+    valueEl.className = 'w-item-value w-negative';
+    valueEl.textContent = fmtMoney(snap ? Number(snap.remaining_balance) : 0);
+    row.appendChild(info);
+    row.appendChild(valueEl);
+    container.appendChild(row);
+  });
 }
 
 function latestSnapshot(snapshots, ownerKey, ownerId) {
