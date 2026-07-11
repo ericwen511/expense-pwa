@@ -436,9 +436,9 @@ let allLiabilities = [];
 let allLiabilitySnapshots = [];
 let allWealthAccounts = [];
 let allWealthTransactions = [];
-const WEALTH_ASSET_CATEGORY_LABELS = { investment: '投資', real_estate: '不動產', insurance: '保單', other: '其他' };
+const WEALTH_ASSET_CATEGORY_LABELS = { investment: '投資', real_estate: '不動產', precious_metal: '貴金屬', crypto: '加密貨幣', insurance: '保單', other: '其他' };
 const WEALTH_LIABILITY_TYPE_LABELS = { mortgage: '房貸', car_loan: '車貸', credit_card: '信用卡', student_loan: '學貸', other: '其他' };
-const WEALTH_DONUT_COLORS = { cash: '#6E7C94', investment: '#C9A25D', real_estate: '#8DA37E', insurance: '#B5715A', other: '#5B6478' };
+const WEALTH_DONUT_COLORS = { cash: '#6E7C94', investment: '#C9A25D', real_estate: '#8DA37E', precious_metal: '#D6C08A', crypto: '#7C6BAF', insurance: '#B5715A', other: '#5B6478' };
 
 document.getElementById('w-asset-date').value = todayDateStr();
 document.getElementById('w-liability-date').value = todayDateStr();
@@ -488,7 +488,8 @@ function renderWealthOverview() {
     .reduce((sum, a) => sum + computeWealthAccountBalance(a.id, a.initial_balance), 0);
 
   const activeAssets = allAssets.filter((a) => !a.is_archived);
-  const assetTotalsByCategory = { investment: 0, real_estate: 0, insurance: 0, other: 0 };
+  const assetTotalsByCategory = {};
+  Object.keys(WEALTH_ASSET_CATEGORY_LABELS).forEach((k) => { assetTotalsByCategory[k] = 0; });
   activeAssets.forEach((a) => {
     if ((a.currency || 'TWD') !== 'TWD') return;
     const snap = latestSnapshot(allAssetSnapshots, 'asset_id', a.id);
@@ -502,8 +503,7 @@ function renderWealthOverview() {
     return sum + (snap ? Number(snap.remaining_balance) : 0);
   }, 0);
 
-  const totalAssets = twdCash + assetTotalsByCategory.investment + assetTotalsByCategory.real_estate
-    + assetTotalsByCategory.insurance + assetTotalsByCategory.other;
+  const totalAssets = twdCash + Object.values(assetTotalsByCategory).reduce((s, v) => s + v, 0);
   const netWorth = totalAssets - totalLiabilities;
   const debtRatio = totalAssets > 0 ? (totalLiabilities / totalAssets) * 100 : 0;
 
@@ -514,10 +514,7 @@ function renderWealthOverview() {
 
   const donutEntries = [
     { key: 'cash', name: '現金', value: twdCash },
-    { key: 'investment', name: '投資', value: assetTotalsByCategory.investment },
-    { key: 'real_estate', name: '不動產', value: assetTotalsByCategory.real_estate },
-    { key: 'insurance', name: '保單', value: assetTotalsByCategory.insurance },
-    { key: 'other', name: '其他', value: assetTotalsByCategory.other }
+    ...Object.keys(WEALTH_ASSET_CATEGORY_LABELS).map((k) => ({ key: k, name: WEALTH_ASSET_CATEGORY_LABELS[k], value: assetTotalsByCategory[k] }))
   ].filter((e) => e.value > 0);
   renderWealthDonut(donutEntries, totalAssets);
 

@@ -634,7 +634,8 @@ label {
 
 /* 桌面/平板：左側邊欄導覽 + 內容區加寬 */
 @media (min-width: 768px) {
-  body { padding-bottom: 0; padding-left: 220px; }
+  body { padding-bottom: 0; }
+  #ledger-shell { padding-left: 220px; }
 
   .app-header, .ledger-bar { padding-left: 32px; padding-right: 32px; }
   .ledger-bar { max-width: 1040px; margin: 0 auto; }
@@ -899,13 +900,12 @@ label {
 .w-nav-btn.active { color: var(--w-gold); }
 
 @media (min-width: 768px) {
-  .wealth-shell { display: grid; grid-template-columns: 220px 1fr; padding-bottom: 0; }
-  .w-header { grid-column: 2; padding: 28px 40px 8px; }
-  .w-main { grid-column: 2; padding: 8px 40px 60px; }
+  .wealth-shell { padding-bottom: 0; padding-left: 220px; }
+  .w-header { padding: 28px 40px 8px; }
+  .w-main { padding: 8px 40px 60px; }
 
   .w-nav {
-    grid-column: 1; grid-row: 1 / -1;
-    position: sticky; top: 0; align-self: start;
+    position: fixed; top: 0; left: 0; bottom: auto;
     width: 220px; height: 100vh;
     flex-direction: column; justify-content: flex-start; align-items: stretch;
     gap: 4px; padding: 28px 14px 14px;
