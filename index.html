@@ -253,6 +253,14 @@
         <label>日期</label>
         <input type="date" id="tx-date" required />
 
+        <label class="checkbox-label" id="tx-recurring-label"><input type="checkbox" id="tx-recurring-checkbox" /> 設為每月定期定額交易</label>
+        <div id="tx-recurring-options" style="display:none;">
+          <label>結束日期（選填，不填表示無限期）</label>
+          <input type="date" id="tx-recurring-end-date" />
+        </div>
+        <p class="hint-text" id="tx-recurring-locked-hint" style="display:none;">這筆是定期定額交易的其中一筆，修改後可選擇是否套用到未來月份</p>
+        <label class="checkbox-label" id="tx-recurring-apply-future-row" style="display:none;"><input type="checkbox" id="tx-recurring-apply-future" /> 同時套用到未來月份</label>
+
         <label>備註</label>
         <textarea id="tx-note" rows="2" placeholder="選填"></textarea>
 
@@ -316,6 +324,10 @@
       <input type="text" id="new-merchant" placeholder="新增商家名稱（例如：全聯、星巴克）" />
       <button type="button" class="primary-btn small" id="add-merchant-btn">新增</button>
     </div>
+
+    <p class="section-title" style="margin-top:20px;">定期定額交易</p>
+    <p class="hint-text">每月固定發生的收支(例如房租、薪水)，未來月份會自動產生交易，日期還沒到之前用淺灰色顯示</p>
+    <div id="recurring-list" class="account-list"></div>
 
     <p class="section-title" style="margin-top:20px;">資料備份</p>
     <button type="button" id="export-json-btn" class="ghost-btn-full">匯出JSON備份（完整資料）</button>

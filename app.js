@@ -106,7 +106,8 @@ function txToRow(t) {
     transaction_date: t.date,
     note: t.note || null,
     client_generated_id: t.clientGeneratedId,
-    ledger_id: t.ledgerId
+    ledger_id: t.ledgerId,
+    recurring_rule_id: t.recurringRuleId || null
   };
 }
 
@@ -123,7 +124,8 @@ function txFromRow(row) {
     note: row.note || '',
     clientGeneratedId: row.client_generated_id,
     ledgerId: row.ledger_id,
-    createdAt: row.created_at
+    createdAt: row.created_at,
+    recurringRuleId: row.recurring_rule_id || null
   };
 }
 
@@ -357,6 +359,7 @@ let allAccounts = [];
 let allTransactions = [];
 let allMerchants = [];
 let allBudgets = [];
+let allRecurringRules = [];
 let currentTxType = 'expense';
 let calcExpr = '0';
 
@@ -385,6 +388,24 @@ document.querySelectorAll('.nav-btn').forEach((btn) => {
 function fmtMoney(n) {
   const rounded = Math.round(n);
   return '$' + rounded.toLocaleString('zh-Hant-TW');
+}
+
+function todayDateStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/* 依「年、月(1-12)、想要的日」算出實際日期字串，日超過當月天數就用當月最後一天 */
+function dateForDayOfMonth(year, month, day) {
+  const lastDay = new Date(year, month, 0).getDate();
+  const clamped = Math.min(day, lastDay);
+  return `${year}-${String(month).padStart(2, '0')}-${String(clamped).padStart(2, '0')}`;
+}
+
+/* 把 'YYYY-MM-DD' 往後推 n 個月，日用同一個day_of_month(超過當月天數會自動夾在月底) */
+function addMonthsToYearMonth(yearMonthDateStr, n) {
+  const [y, m] = yearMonthDateStr.split('-').map(Number);
+  const total = (y * 12 + (m - 1)) + n;
+  return { year: Math.floor(total / 12), month: (total % 12) + 1 };
 }
 
 /* ---------- 金額計算機 ---------- */
@@ -461,7 +482,12 @@ async function refreshAll() {
   } catch (err) {
     allBudgets = [];
   }
-  const synced = await sbGetAllTransactions();
+  try {
+    allRecurringRules = await sbGetAllInLedger('recurring_rules');
+  } catch (err) {
+    allRecurringRules = [];
+  }
+
   const pending = (await idbGetAll('pending_transactions'))
     .filter((p) => p.ledgerId === currentLedgerId)
     .map((p) => ({
@@ -469,14 +495,29 @@ async function refreshAll() {
       id: 'pending-' + p.clientGeneratedId,
       pending: true
     }));
+
+  const synced = await sbGetAllTransactions();
   allTransactions = synced.concat(pending);
   allTransactions.sort((a, b) => (a.date + a.createdAt).localeCompare(b.date + b.createdAt));
+
+  let generatedMore = false;
+  try {
+    generatedMore = await ensureRecurringHorizon();
+  } catch (err) {
+    generatedMore = false;
+  }
+  if (generatedMore) {
+    const syncedAgain = await sbGetAllTransactions();
+    allTransactions = syncedAgain.concat(pending);
+    allTransactions.sort((a, b) => (a.date + a.createdAt).localeCompare(b.date + b.createdAt));
+  }
 
   renderOverview();
   renderList();
   renderCategoryScreen();
   renderAccountsScreen();
   renderLedgerManagement();
+  renderRecurringList();
   populateFormSelectors();
   renderFilterChips();
 }
@@ -886,9 +927,11 @@ function buildTxRow(t, showDelete, showDate) {
     info.appendChild(meta);
   }
 
+  const isFuture = t.date > todayDateStr();
   const amount = document.createElement('p');
-  amount.className = 'tx-amount ' + (t.type === 'expense' ? 'expense' : t.type === 'income' ? 'income' : 'transfer');
+  amount.className = 'tx-amount ' + (t.type === 'expense' ? 'expense' : t.type === 'income' ? 'income' : 'transfer') + (isFuture ? ' future' : '');
   amount.textContent = (t.type === 'expense' ? '-' : t.type === 'income' ? '+' : '') + fmtMoney(t.amount).replace('$', '$');
+  if (isFuture) row.classList.add('tx-row-future');
 
   row.appendChild(info);
   row.appendChild(amount);
@@ -1022,18 +1065,72 @@ document.getElementById('tx-form').addEventListener('submit', async (e) => {
     };
   }
 
+  const applyFuture = document.getElementById('tx-recurring-apply-future').checked;
+  const makeRecurring = !editingTransactionId && document.getElementById('tx-recurring-checkbox').checked;
+  const recurringEndDate = document.getElementById('tx-recurring-end-date').value || null;
+
   if (editingTransactionId) {
     const row = txToRow(record);
     delete row.client_generated_id;
     delete row.ledger_id;
+    delete row.recurring_rule_id;
     await sbUpdate('transactions', editingTransactionId, row);
+
+    if (editingRecurringRuleId && applyFuture) {
+      try {
+        const ruleFields = {
+          type: record.type,
+          amount: record.amount,
+          category_id: record.categoryId || null,
+          account_id: record.accountId,
+          transfer_to_account_id: record.transferToAccountId || null,
+          merchant_id: record.merchantId || null,
+          note: record.note || null
+        };
+        await sbUpdate('recurring_rules', editingRecurringRuleId, ruleFields);
+        const today = todayDateStr();
+        const futureOnes = allTransactions.filter((t) =>
+          t.recurringRuleId === editingRecurringRuleId && t.date > today && t.id !== editingTransactionId
+        );
+        for (const t of futureOnes) {
+          await sbUpdate('transactions', t.id, ruleFields);
+        }
+      } catch (err) {
+        /* 套用到未來月份失敗不影響這筆本身已經存檔成功 */
+      }
+    }
   } else {
     record.clientGeneratedId = crypto.randomUUID();
     record.ledgerId = currentLedgerId;
+    let insertedRow = null;
     try {
-      await sbInsertTransaction(txToRow(record));
+      insertedRow = await sbInsertTransaction(txToRow(record));
     } catch (err) {
       await idbPut('pending_transactions', { ...record, createdAt: new Date().toISOString() });
+    }
+
+    if (insertedRow && makeRecurring) {
+      try {
+        const day = Number(record.date.split('-')[2]);
+        const rule = await sbInsert('recurring_rules', {
+          ledger_id: currentLedgerId,
+          type: record.type,
+          amount: record.amount,
+          category_id: record.categoryId || null,
+          account_id: record.accountId,
+          transfer_to_account_id: record.transferToAccountId || null,
+          merchant_id: record.merchantId || null,
+          note: record.note || null,
+          day_of_month: day,
+          start_date: record.date,
+          end_date: recurringEndDate,
+          is_active: true
+        });
+        await sbUpdate('transactions', insertedRow.id, { recurring_rule_id: rule.id });
+        await generateRecurringOccurrences(rule, record.date);
+      } catch (err) {
+        /* 定期定額規則建立失敗不影響這筆交易本身已經存檔成功 */
+      }
     }
   }
 
@@ -1042,7 +1139,12 @@ document.getElementById('tx-form').addEventListener('submit', async (e) => {
   switchTab('overview');
 });
 
+document.getElementById('tx-recurring-checkbox').addEventListener('change', (e) => {
+  document.getElementById('tx-recurring-options').style.display = e.target.checked ? 'block' : 'none';
+});
+
 let editingTransactionId = null;
+let editingRecurringRuleId = null;
 
 /* 帳戶如果已經停用，新增交易的下拉選單裡不會有它；編輯舊交易時要補回去，
    不然存檔會被悄悄改成別的帳戶 */
@@ -1062,6 +1164,7 @@ function ensureAccountOption(selectEl, accountId) {
 
 function startEditTransaction(t) {
   editingTransactionId = t.id;
+  editingRecurringRuleId = t.recurringRuleId || null;
   switchTab('add');
   setTxType(t.type);
   calcExpr = String(t.amount);
@@ -1082,10 +1185,21 @@ function startEditTransaction(t) {
   document.getElementById('tx-form-submit').textContent = '更新交易';
   document.getElementById('tx-form-cancel').style.display = 'block';
   document.getElementById('tx-form-delete').style.display = 'block';
+  document.getElementById('tx-recurring-label').style.display = 'none';
+  document.getElementById('tx-recurring-options').style.display = 'none';
+  if (editingRecurringRuleId) {
+    document.getElementById('tx-recurring-locked-hint').style.display = 'block';
+    document.getElementById('tx-recurring-apply-future-row').style.display = 'flex';
+  } else {
+    document.getElementById('tx-recurring-locked-hint').style.display = 'none';
+    document.getElementById('tx-recurring-apply-future-row').style.display = 'none';
+  }
+  document.getElementById('tx-recurring-apply-future').checked = false;
 }
 
 function cancelEditTransaction() {
   editingTransactionId = null;
+  editingRecurringRuleId = null;
   document.getElementById('tx-form').reset();
   document.getElementById('tx-date').value = new Date().toISOString().slice(0, 10);
   resetCalc();
@@ -1093,6 +1207,10 @@ function cancelEditTransaction() {
   document.getElementById('tx-form-submit').textContent = '儲存';
   document.getElementById('tx-form-cancel').style.display = 'none';
   document.getElementById('tx-form-delete').style.display = 'none';
+  document.getElementById('tx-recurring-label').style.display = 'flex';
+  document.getElementById('tx-recurring-options').style.display = 'none';
+  document.getElementById('tx-recurring-locked-hint').style.display = 'none';
+  document.getElementById('tx-recurring-apply-future-row').style.display = 'none';
 }
 
 document.getElementById('tx-form-delete').addEventListener('click', async () => {
@@ -1102,6 +1220,127 @@ document.getElementById('tx-form-delete').addEventListener('click', async () => 
   await refreshAll();
   switchTab('overview');
 });
+
+/* ---------- 定期定額交易 ---------- */
+
+/* 從 afterDateStr 的下個月開始，每月產生一筆規則裡設定的交易，直到「今天起12個月」或結束日期(取較早者) */
+async function generateRecurringOccurrences(rule, afterDateStr) {
+  const today = todayDateStr();
+  const horizonYM = addMonthsToYearMonth(today, 12);
+  let horizon = dateForDayOfMonth(horizonYM.year, horizonYM.month, rule.day_of_month);
+  if (rule.end_date && rule.end_date < horizon) horizon = rule.end_date;
+
+  const [ay, am] = afterDateStr.split('-').map(Number);
+  let inserted = false;
+  let offset = 1;
+  while (true) {
+    const total = ay * 12 + (am - 1) + offset;
+    const year = Math.floor(total / 12);
+    const month = (total % 12) + 1;
+    const d = dateForDayOfMonth(year, month, rule.day_of_month);
+    if (d > horizon) break;
+    const row = {
+      type: rule.type,
+      amount: Number(rule.amount),
+      category_id: rule.category_id,
+      account_id: rule.account_id,
+      merchant_id: rule.merchant_id,
+      transfer_to_account_id: rule.transfer_to_account_id,
+      transaction_date: d,
+      note: rule.note,
+      client_generated_id: crypto.randomUUID(),
+      ledger_id: rule.ledger_id,
+      recurring_rule_id: rule.id
+    };
+    try {
+      await sbInsertTransaction(row);
+      inserted = true;
+    } catch (err) {
+      /* 單筆失敗就跳過，不中斷其餘月份的產生 */
+    }
+    offset++;
+  }
+  return inserted;
+}
+
+/* 幫每個還在生效中的定期定額規則，把交易補到「今天起12個月」的範圍 */
+async function ensureRecurringHorizon() {
+  const today = todayDateStr();
+  const activeRules = allRecurringRules.filter((r) => r.is_active && (!r.end_date || r.end_date >= today));
+  let generatedAny = false;
+  for (const rule of activeRules) {
+    const existing = allTransactions.filter((t) => t.recurringRuleId === rule.id);
+    let baseline;
+    if (existing.length) {
+      baseline = existing.reduce((max, t) => (t.date > max ? t.date : max), existing[0].date);
+    } else {
+      const prev = addMonthsToYearMonth(rule.start_date, -1);
+      baseline = `${prev.year}-${String(prev.month).padStart(2, '0')}-01`;
+    }
+    const didInsert = await generateRecurringOccurrences(rule, baseline);
+    if (didInsert) generatedAny = true;
+  }
+  return generatedAny;
+}
+
+function renderRecurringList() {
+  const container = document.getElementById('recurring-list');
+  if (!container) return;
+  container.innerHTML = '';
+  const active = allRecurringRules.filter((r) => r.is_active);
+  if (!active.length) {
+    container.innerHTML = '<p class="empty-hint" style="margin:8px 0;">目前沒有設定定期定額交易</p>';
+    return;
+  }
+  active.forEach((rule) => {
+    const row = document.createElement('div');
+    row.className = 'account-row';
+
+    const info = document.createElement('div');
+    info.className = 'account-info';
+
+    const name = document.createElement('p');
+    name.className = 'account-name';
+    name.textContent = rule.type === 'transfer'
+      ? `從 ${accountName(rule.account_id)} 轉到 ${accountName(rule.transfer_to_account_id)}`
+      : `${categoryName(rule.category_id)} · ${accountName(rule.account_id)}`;
+
+    const meta = document.createElement('p');
+    meta.className = 'account-meta';
+    meta.textContent = `每月${rule.day_of_month}號` + (rule.end_date ? `，至${rule.end_date}` : '，無限期') + (rule.note ? ' · ' + rule.note : '');
+
+    info.appendChild(name);
+    info.appendChild(meta);
+
+    const amountEl = document.createElement('p');
+    amountEl.className = 'account-balance';
+    amountEl.textContent = (rule.type === 'expense' ? '-' : rule.type === 'income' ? '+' : '') + fmtMoney(rule.amount);
+
+    const actions = document.createElement('div');
+    actions.className = 'cat-actions';
+    const stopBtn = document.createElement('button');
+    stopBtn.textContent = '停止';
+    stopBtn.addEventListener('click', async () => {
+      await stopRecurringRule(rule);
+      await refreshAll();
+    });
+    actions.appendChild(stopBtn);
+
+    row.appendChild(info);
+    row.appendChild(amountEl);
+    row.appendChild(actions);
+    container.appendChild(row);
+  });
+}
+
+async function stopRecurringRule(rule) {
+  const today = todayDateStr();
+  await sbUpdate('recurring_rules', rule.id, { is_active: false, end_date: today });
+  const future = allTransactions.filter((t) => t.recurringRuleId === rule.id && t.date > today);
+  for (const t of future) {
+    await sbSoftDeleteTransaction(t.id);
+  }
+}
 
 document.getElementById('tx-form-cancel').addEventListener('click', cancelEditTransaction);
 

@@ -193,6 +193,10 @@ button { transition: background-color 0.15s ease, border-color 0.15s ease, color
 .tx-amount.income { color: var(--income); }
 .tx-amount.transfer { color: var(--primary); }
 
+.tx-row-future .tx-title,
+.tx-row-future .tx-meta,
+.tx-row-future .tx-amount { color: var(--text-muted) !important; }
+
 .tx-actions { display: flex; gap: 2px; flex-shrink: 0; }
 
 .tx-delete, .tx-edit {
@@ -371,6 +375,17 @@ label {
   display: block;
   margin-bottom: 4px;
 }
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-primary);
+  margin: 10px 0;
+  cursor: pointer;
+}
+.checkbox-label input[type="checkbox"] { width: auto; margin: 0; }
 
 .type-toggle { display: flex; gap: 8px; margin-bottom: 16px; }
 
