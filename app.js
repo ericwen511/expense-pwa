@@ -550,14 +550,23 @@ function renderOverview() {
   renderCategoryChart(periodTx);
 }
 
-document.querySelectorAll('#overview-view-mode .chart-toggle-btn').forEach((btn) => {
+document.querySelectorAll('#overview-view-mode .chart-toggle-btn[data-view-mode]').forEach((btn) => {
   btn.addEventListener('click', () => {
     overviewViewMode = btn.dataset.viewMode;
-    document.querySelectorAll('#overview-view-mode .chart-toggle-btn').forEach((b) => {
+    document.querySelectorAll('#overview-view-mode .chart-toggle-btn[data-view-mode]').forEach((b) => {
       b.classList.toggle('active', b.dataset.viewMode === overviewViewMode);
     });
     renderOverview();
   });
+});
+
+document.getElementById('overview-jump-current').addEventListener('click', () => {
+  overviewViewMode = 'month';
+  overviewYearMonth = new Date().toISOString().slice(0, 7);
+  document.querySelectorAll('#overview-view-mode .chart-toggle-btn[data-view-mode]').forEach((b) => {
+    b.classList.toggle('active', b.dataset.viewMode === overviewViewMode);
+  });
+  renderOverview();
 });
 
 document.querySelectorAll('#overview-type-toggle .type-btn').forEach((btn) => {
