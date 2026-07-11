@@ -437,7 +437,7 @@ async function refreshAll() {
       pending: true
     }));
   allTransactions = synced.concat(pending);
-  allTransactions.sort((a, b) => (b.date + b.createdAt).localeCompare(a.date + a.createdAt));
+  allTransactions.sort((a, b) => (a.date + a.createdAt).localeCompare(b.date + b.createdAt));
 
   renderOverview();
   renderList();
@@ -504,27 +504,57 @@ function populateMonthNavSelectors() {
   }
 }
 
+let overviewViewMode = 'month';
+let overviewTypeFilter = 'expense';
+
 function renderOverview() {
   populateMonthNavSelectors();
   const [y, m] = overviewYearMonth.split('-');
   document.getElementById('year-select').value = String(Number(y));
   document.getElementById('month-select').value = String(Number(m));
+  document.getElementById('month-select').style.display = overviewViewMode === 'year' ? 'none' : 'inline-block';
 
-  const monthTx = allTransactions.filter((t) => t.date.slice(0, 7) === overviewYearMonth);
-  const expense = monthTx.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-  const income = monthTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+  const periodTx = overviewViewMode === 'year'
+    ? allTransactions.filter((t) => t.date.slice(0, 4) === y)
+    : allTransactions.filter((t) => t.date.slice(0, 7) === overviewYearMonth);
+
+  const expense = periodTx.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const income = periodTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
 
   document.getElementById('sum-expense').textContent = fmtMoney(expense);
   document.getElementById('sum-income').textContent = fmtMoney(income);
   document.getElementById('sum-balance').textContent = fmtMoney(income - expense);
 
+  document.getElementById('overview-list-title').textContent = overviewViewMode === 'year' ? '當年交易' : '當月交易';
+
+  const filteredList = periodTx.filter((t) => t.type === overviewTypeFilter);
   const list = document.getElementById('overview-list');
   list.innerHTML = '';
-  document.getElementById('overview-empty').style.display = monthTx.length ? 'none' : 'block';
-  monthTx.forEach((t) => list.appendChild(buildTxRow(t, false, true)));
+  document.getElementById('overview-empty').style.display = filteredList.length ? 'none' : 'block';
+  filteredList.forEach((t) => list.appendChild(buildTxRow(t, false, true)));
 
-  renderCategoryChart(monthTx);
+  renderCategoryChart(periodTx);
 }
+
+document.querySelectorAll('#overview-view-mode .chart-toggle-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    overviewViewMode = btn.dataset.viewMode;
+    document.querySelectorAll('#overview-view-mode .chart-toggle-btn').forEach((b) => {
+      b.classList.toggle('active', b.dataset.viewMode === overviewViewMode);
+    });
+    renderOverview();
+  });
+});
+
+document.querySelectorAll('#overview-type-toggle .type-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    overviewTypeFilter = btn.dataset.overviewType;
+    document.querySelectorAll('#overview-type-toggle .type-btn').forEach((b) => {
+      b.classList.toggle('active', b.dataset.overviewType === overviewTypeFilter);
+    });
+    renderOverview();
+  });
+});
 
 /* ---------- 分類佔比圖表 ---------- */
 let chartType = 'pie';
@@ -655,8 +685,9 @@ document.getElementById('chart-bar-btn').addEventListener('click', () => {
 });
 
 function shiftOverviewMonth(delta) {
+  const step = overviewViewMode === 'year' ? delta * 12 : delta;
   const [y, m] = overviewYearMonth.split('-').map(Number);
-  const d = new Date(y, m - 1 + delta, 1);
+  const d = new Date(y, m - 1 + step, 1);
   const next = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
   if (next < '2010-01') return;
   overviewYearMonth = next;
@@ -1226,6 +1257,13 @@ document.getElementById('import-json-input').addEventListener('change', async (e
     setStatus('讀取檔案中...');
     const data = JSON.parse(await file.text());
 
+    let setupFailed = 0;
+    const setupFailedSamples = [];
+    function recordSetupError(kind, err) {
+      setupFailed++;
+      if (setupFailedSamples.length < 5) setupFailedSamples.push(`${kind}: ${(err && err.message) || err}`);
+    }
+
     setStatus('建立帳戶中...');
     const accountIdMap = {};
     for (const a of (data.accounts || [])) {
@@ -1234,14 +1272,18 @@ document.getElementById('import-json-input').addEventListener('change', async (e
         accountIdMap[a.id] = existing.id;
         continue;
       }
-      const inserted = await sbInsert('accounts', {
-        name: a.name,
-        type: a.type,
-        initial_balance: a.initial_balance || 0,
-        is_archived: !!a.is_archived,
-        ledger_id: currentLedgerId
-      });
-      accountIdMap[a.id] = inserted.id;
+      try {
+        const inserted = await sbInsert('accounts', {
+          name: a.name,
+          type: a.type,
+          initial_balance: a.initial_balance || 0,
+          is_archived: !!a.is_archived,
+          ledger_id: currentLedgerId
+        });
+        accountIdMap[a.id] = inserted.id;
+      } catch (err) {
+        recordSetupError('帳戶 ' + a.name, err);
+      }
     }
 
     setStatus('建立分類中...');
@@ -1252,8 +1294,12 @@ document.getElementById('import-json-input').addEventListener('change', async (e
         categoryIdMap[c.id] = existing.id;
         continue;
       }
-      const inserted = await sbInsert('categories', { name: c.name, type: c.type });
-      categoryIdMap[c.id] = inserted.id;
+      try {
+        const inserted = await sbInsert('categories', { name: c.name, type: c.type });
+        categoryIdMap[c.id] = inserted.id;
+      } catch (err) {
+        recordSetupError('分類 ' + c.name, err);
+      }
     }
 
     setStatus('建立商家中...');
@@ -1264,12 +1310,19 @@ document.getElementById('import-json-input').addEventListener('change', async (e
         merchantIdMap[m.id] = existing.id;
         continue;
       }
-      const inserted = await sbInsert('merchants', { name: m.name });
-      merchantIdMap[m.id] = inserted.id;
+      try {
+        const inserted = await sbInsert('merchants', { name: m.name });
+        merchantIdMap[m.id] = inserted.id;
+      } catch (err) {
+        recordSetupError('商家 ' + m.name, err);
+      }
     }
 
     const txList = data.transactions || [];
     let done = 0;
+    let failed = 0;
+    let skippedNoAccount = 0;
+    const failedSamples = [];
     for (const t of txList) {
       const row = txToRow({
         type: t.type,
@@ -1285,23 +1338,30 @@ document.getElementById('import-json-input').addEventListener('change', async (e
       });
       done++;
       if (!row.account_id) {
-        setStatus(`匯入交易中... ${done}/${txList.length}`);
-        continue;
-      }
-      try {
-        await sbInsertTransaction(row);
-      } catch (err) {
-        if (!(err && err.code === '23505')) throw err;
+        skippedNoAccount++;
+      } else {
+        try {
+          await sbInsertTransaction(row);
+        } catch (err) {
+          if (!(err && err.code === '23505')) {
+            failed++;
+            if (failedSamples.length < 5) failedSamples.push((err && err.message) || String(err));
+          }
+        }
       }
       if (done % 5 === 0 || done === txList.length) {
-        setStatus(`匯入交易中... ${done}/${txList.length}`);
+        setStatus(`匯入交易中... ${done}/${txList.length}（失敗 ${failed} 筆）`);
       }
     }
 
     setStatus('整理畫面中...');
     await refreshAll();
     statusEl.style.display = 'none';
-    alert('匯入完成！');
+    let summary = `匯入完成！共處理 ${txList.length} 筆交易`;
+    if (failed) summary += `，其中 ${failed} 筆失敗：\n` + failedSamples.join('\n');
+    if (skippedNoAccount) summary += `\n另有 ${skippedNoAccount} 筆因缺少帳戶資訊而略過`;
+    if (setupFailed) summary += `\n帳戶/分類/商家建立失敗 ${setupFailed} 筆：\n` + setupFailedSamples.join('\n');
+    alert(summary);
   } catch (err) {
     statusEl.style.display = 'none';
     alert('匯入失敗：' + err.message);

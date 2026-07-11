@@ -56,6 +56,10 @@
 
   <!-- 總覽 -->
   <section id="screen-overview" class="screen active">
+    <div class="chart-toggle" id="overview-view-mode" style="justify-content:center; margin-bottom:10px;">
+      <button type="button" class="chart-toggle-btn active" data-view-mode="month">按月</button>
+      <button type="button" class="chart-toggle-btn" data-view-mode="year">按年</button>
+    </div>
     <div class="month-nav">
       <button type="button" id="month-prev" class="month-nav-btn">‹</button>
       <select id="year-select" class="year-select"></select>
@@ -87,7 +91,12 @@
       <div id="category-chart"></div>
     </div>
 
-    <p class="section-title">當月交易</p>
+    <p class="section-title" id="overview-list-title">當月交易</p>
+    <div class="type-toggle" id="overview-type-toggle">
+      <button type="button" class="type-btn active expense-btn" data-overview-type="expense">支出</button>
+      <button type="button" class="type-btn income-btn" data-overview-type="income">收入</button>
+      <button type="button" class="type-btn transfer-btn" data-overview-type="transfer">轉帳</button>
+    </div>
     <div id="overview-list" class="tx-list"></div>
     <p class="empty-hint" id="overview-empty" style="display:none;">還沒有任何紀錄，點下方「新增」開始記帳。</p>
   </section>
