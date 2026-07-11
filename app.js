@@ -359,7 +359,12 @@ function switchTab(tab) {
 }
 
 document.querySelectorAll('.nav-btn').forEach((btn) => {
-  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  btn.addEventListener('click', () => {
+    if (btn.dataset.tab === 'add' && editingTransactionId) {
+      cancelEditTransaction();
+    }
+    switchTab(btn.dataset.tab);
+  });
 });
 
 /* ---------- 金額格式化 ---------- */
@@ -985,6 +990,7 @@ function startEditTransaction(t) {
   }
   document.getElementById('tx-form-submit').textContent = '更新交易';
   document.getElementById('tx-form-cancel').style.display = 'block';
+  document.getElementById('tx-form-delete').style.display = 'block';
 }
 
 function cancelEditTransaction() {
@@ -995,7 +1001,16 @@ function cancelEditTransaction() {
   setTxType('expense');
   document.getElementById('tx-form-submit').textContent = '儲存';
   document.getElementById('tx-form-cancel').style.display = 'none';
+  document.getElementById('tx-form-delete').style.display = 'none';
 }
+
+document.getElementById('tx-form-delete').addEventListener('click', async () => {
+  if (!editingTransactionId) return;
+  await sbSoftDeleteTransaction(editingTransactionId);
+  cancelEditTransaction();
+  await refreshAll();
+  switchTab('overview');
+});
 
 document.getElementById('tx-form-cancel').addEventListener('click', cancelEditTransaction);
 

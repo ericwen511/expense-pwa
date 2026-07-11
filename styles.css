@@ -559,6 +559,8 @@ label {
   margin-top: 8px;
 }
 
+.ghost-btn-full.danger { border-color: var(--expense); color: var(--expense); }
+
 .bottom-nav {
   position: fixed;
   bottom: 0;
