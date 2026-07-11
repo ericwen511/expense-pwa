@@ -465,11 +465,12 @@ async function loadWealthData() {
   renderWealthAssetsScreen();
   renderWealthLiabilitiesScreen();
   renderWealthOverview();
+  renderWealthTrendChart();
 }
 
-function computeWealthAccountBalance(accountId, initialBalance) {
+function computeWealthAccountBalance(accountId, initialBalance, txList) {
   let total = initialBalance || 0;
-  allWealthTransactions.forEach((t) => {
+  (txList || allWealthTransactions).forEach((t) => {
     if (t.type === 'transfer') {
       if (t.accountId === accountId) total -= t.amount;
       if (t.transferToAccountId === accountId) total += (t.transferToAmount || t.amount);
@@ -606,6 +607,104 @@ function renderWealthAccountList(activeAccounts) {
     row.appendChild(valueEl);
     container.appendChild(row);
   });
+}
+
+/* 依所有資產/負債快照出現過的日期，逐日重建當時的淨資產(現金用交易日期回推、
+   資產/負債用當時最新的快照)，不需要額外的每日快照表 */
+function buildWealthTrendSeries() {
+  const dateSet = new Set();
+  allAssetSnapshots.forEach((s) => dateSet.add(s.snapshot_date));
+  allLiabilitySnapshots.forEach((s) => dateSet.add(s.snapshot_date));
+  const dates = Array.from(dateSet).sort();
+  if (!dates.length) return [];
+
+  const twdAssets = allAssets.filter((a) => !a.is_archived && (a.currency || 'TWD') === 'TWD');
+  const activeLiabilities = allLiabilities.filter((l) => !l.is_archived);
+  const twdAccounts = allWealthAccounts.filter((a) => !a.is_archived && (a.currency || 'TWD') === 'TWD');
+
+  return dates.map((date) => {
+    const assetsTotal = twdAssets.reduce((sum, a) => {
+      const snap = latestSnapshot(allAssetSnapshots.filter((s) => s.snapshot_date <= date), 'asset_id', a.id);
+      return sum + (snap ? Number(snap.value) : 0);
+    }, 0);
+    const liabilitiesTotal = activeLiabilities.reduce((sum, l) => {
+      const snap = latestSnapshot(allLiabilitySnapshots.filter((s) => s.snapshot_date <= date), 'liability_id', l.id);
+      return sum + (snap ? Number(snap.remaining_balance) : 0);
+    }, 0);
+    const txUpToDate = allWealthTransactions.filter((t) => t.date <= date);
+    const cashTotal = twdAccounts.reduce((sum, a) => sum + computeWealthAccountBalance(a.id, a.initial_balance, txUpToDate), 0);
+    return { date, netWorth: cashTotal + assetsTotal - liabilitiesTotal };
+  });
+}
+
+function renderWealthTrendChart() {
+  const container = document.getElementById('w-trend-chart');
+  container.innerHTML = '';
+  const series = buildWealthTrendSeries();
+
+  if (series.length < 2) {
+    const hint = document.createElement('p');
+    hint.className = 'w-empty-hint';
+    hint.textContent = '至少要有兩個不同日期的資產/負債快照才能畫趨勢圖';
+    container.appendChild(hint);
+    return;
+  }
+
+  const width = 700, height = 220, padding = 10;
+  const values = series.map((s) => s.netWorth);
+  const min = Math.min(...values), max = Math.max(...values);
+  const range = max - min || 1;
+  const points = series.map((s, i) => {
+    const x = (i / (series.length - 1)) * (width - padding * 2) + padding;
+    const y = height - padding - ((s.netWorth - min) / range) * (height - padding * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  svg.setAttribute('preserveAspectRatio', 'none');
+  svg.style.width = '100%';
+  svg.style.display = 'block';
+
+  const defs = document.createElementNS(svgNS, 'defs');
+  const grad = document.createElementNS(svgNS, 'linearGradient');
+  grad.setAttribute('id', 'w-trend-grad');
+  grad.setAttribute('x1', '0'); grad.setAttribute('y1', '0'); grad.setAttribute('x2', '0'); grad.setAttribute('y2', '1');
+  const stop1 = document.createElementNS(svgNS, 'stop');
+  stop1.setAttribute('offset', '0%'); stop1.setAttribute('stop-color', '#C9A25D'); stop1.setAttribute('stop-opacity', '0.35');
+  const stop2 = document.createElementNS(svgNS, 'stop');
+  stop2.setAttribute('offset', '100%'); stop2.setAttribute('stop-color', '#C9A25D'); stop2.setAttribute('stop-opacity', '0');
+  grad.appendChild(stop1); grad.appendChild(stop2);
+  defs.appendChild(grad);
+  svg.appendChild(defs);
+
+  const fillPoly = document.createElementNS(svgNS, 'polyline');
+  fillPoly.setAttribute('points', `${padding},${height - padding} ${points.join(' ')} ${width - padding},${height - padding}`);
+  fillPoly.setAttribute('fill', 'url(#w-trend-grad)');
+  fillPoly.setAttribute('stroke', 'none');
+  svg.appendChild(fillPoly);
+
+  const linePoly = document.createElementNS(svgNS, 'polyline');
+  linePoly.setAttribute('points', points.join(' '));
+  linePoly.setAttribute('fill', 'none');
+  linePoly.setAttribute('stroke', '#C9A25D');
+  linePoly.setAttribute('stroke-width', '2.5');
+  linePoly.setAttribute('stroke-linecap', 'round');
+  linePoly.setAttribute('stroke-linejoin', 'round');
+  svg.appendChild(linePoly);
+
+  container.appendChild(svg);
+
+  const labels = document.createElement('div');
+  labels.className = 'w-trend-labels';
+  const firstLabel = document.createElement('span');
+  firstLabel.textContent = series[0].date;
+  const lastLabel = document.createElement('span');
+  lastLabel.textContent = series[series.length - 1].date + '　' + fmtMoney(series[series.length - 1].netWorth);
+  labels.appendChild(firstLabel);
+  labels.appendChild(lastLabel);
+  container.appendChild(labels);
 }
 
 function renderWealthOverviewAssetList(activeAssets) {

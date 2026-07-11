@@ -796,7 +796,7 @@ label {
 .w-brand { font-family: 'Playfair Display', serif; font-size: 19px; color: var(--w-gold); letter-spacing: 0.01em; }
 .w-date { font-size: 12px; color: var(--w-text-dim); }
 
-.w-main { padding: 8px 16px 24px; max-width: 1160px; margin: 0 auto; }
+.w-main { width: 100%; padding: 8px 16px 24px; max-width: 1160px; margin: 0 auto; }
 
 .w-screen { display: none; }
 .w-screen.active { display: block; }
@@ -862,6 +862,8 @@ label {
 .w-item-actions button:hover { color: var(--w-gold); }
 
 .w-empty-hint { font-size: 13px; color: var(--w-text-dim); text-align: center; padding: 20px 0; }
+
+.w-trend-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--w-text-dim); margin-top: 8px; }
 
 /* 表單元件 */
 .w-label { font-size: 12px; color: var(--w-text-dim); display: block; margin: 12px 0 4px; }
