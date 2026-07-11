@@ -411,9 +411,265 @@ document.querySelectorAll('.w-nav-btn[data-wtab]').forEach((btn) => {
   btn.addEventListener('click', () => switchWealthTab(btn.dataset.wtab));
 });
 
+let allAssets = [];
+let allAssetSnapshots = [];
+let allLiabilities = [];
+let allLiabilitySnapshots = [];
+const WEALTH_ASSET_CATEGORY_LABELS = { investment: '投資', real_estate: '不動產', insurance: '保單', other: '其他' };
+const WEALTH_LIABILITY_TYPE_LABELS = { mortgage: '房貸', car_loan: '車貸', credit_card: '信用卡', student_loan: '學貸', other: '其他' };
+
+document.getElementById('w-asset-date').value = todayDateStr();
+document.getElementById('w-liability-date').value = todayDateStr();
+
 async function loadWealthData() {
-  /* 骨架階段先留空，下一步接資產/負債/帳戶資料 */
+  try {
+    allAssets = await sbGetAll('assets');
+    allAssetSnapshots = await sbGetAll('asset_snapshots');
+    allLiabilities = await sbGetAll('liabilities');
+    allLiabilitySnapshots = await sbGetAll('liability_snapshots');
+  } catch (err) {
+    allAssets = [];
+    allAssetSnapshots = [];
+    allLiabilities = [];
+    allLiabilitySnapshots = [];
+  }
+  renderWealthAssetsScreen();
+  renderWealthLiabilitiesScreen();
 }
+
+function latestSnapshot(snapshots, ownerKey, ownerId) {
+  const matches = snapshots.filter((s) => s[ownerKey] === ownerId);
+  if (!matches.length) return null;
+  return matches.reduce((latest, s) => (s.snapshot_date > latest.snapshot_date ? s : latest), matches[0]);
+}
+
+/* ---------- 資產 ---------- */
+let editingAssetId = null;
+
+function renderWealthAssetsScreen() {
+  const container = document.getElementById('w-assets-full-list');
+  container.innerHTML = '';
+  const active = allAssets.filter((a) => !a.is_archived);
+  if (!active.length) {
+    const hint = document.createElement('p');
+    hint.className = 'w-empty-hint';
+    hint.textContent = '還沒有資產紀錄';
+    container.appendChild(hint);
+    return;
+  }
+  active.forEach((a) => {
+    const snap = latestSnapshot(allAssetSnapshots, 'asset_id', a.id);
+    const row = document.createElement('div');
+    row.className = 'w-item-row';
+
+    const info = document.createElement('div');
+    const name = document.createElement('div');
+    name.className = 'w-item-name';
+    name.textContent = a.name;
+    const meta = document.createElement('div');
+    meta.className = 'w-item-meta';
+    meta.textContent = (WEALTH_ASSET_CATEGORY_LABELS[a.category] || a.category) + (snap ? ' · 上次更新 ' + snap.snapshot_date : ' · 尚未輸入價值');
+    info.appendChild(name);
+    info.appendChild(meta);
+
+    const valueEl = document.createElement('div');
+    valueEl.className = 'w-item-value';
+    valueEl.textContent = fmtMoney(snap ? Number(snap.value) : 0, a.currency);
+
+    const actions = document.createElement('div');
+    actions.className = 'w-item-actions';
+    const editBtn = document.createElement('button');
+    editBtn.textContent = '編輯';
+    editBtn.addEventListener('click', () => startEditWealthAsset(a));
+    const archiveBtn = document.createElement('button');
+    archiveBtn.textContent = '停用';
+    archiveBtn.addEventListener('click', async () => {
+      await sbUpdate('assets', a.id, { is_archived: true });
+      await loadWealthData();
+    });
+    actions.appendChild(editBtn);
+    actions.appendChild(archiveBtn);
+
+    row.appendChild(info);
+    row.appendChild(valueEl);
+    row.appendChild(actions);
+    container.appendChild(row);
+  });
+}
+
+function startEditWealthAsset(a) {
+  editingAssetId = a.id;
+  document.getElementById('w-asset-name').value = a.name;
+  document.getElementById('w-asset-category').value = a.category;
+  document.getElementById('w-asset-currency').value = a.currency;
+  const snap = latestSnapshot(allAssetSnapshots, 'asset_id', a.id);
+  document.getElementById('w-asset-value').value = snap ? snap.value : '';
+  document.getElementById('w-asset-date').value = todayDateStr();
+  document.getElementById('w-asset-form-submit').textContent = '更新資產';
+  document.getElementById('w-asset-form-cancel').style.display = 'block';
+}
+
+function cancelWealthAssetEdit() {
+  editingAssetId = null;
+  document.getElementById('w-asset-form').reset();
+  document.getElementById('w-asset-date').value = todayDateStr();
+  document.getElementById('w-asset-form-submit').textContent = '新增資產';
+  document.getElementById('w-asset-form-cancel').style.display = 'none';
+}
+
+document.getElementById('w-asset-form-cancel').addEventListener('click', cancelWealthAssetEdit);
+
+document.getElementById('w-asset-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = document.getElementById('w-asset-name').value.trim();
+  const category = document.getElementById('w-asset-category').value;
+  const currency = document.getElementById('w-asset-currency').value;
+  const value = parseFloat(document.getElementById('w-asset-value').value);
+  const date = document.getElementById('w-asset-date').value;
+  if (!name || !value || value <= 0 || !date) return;
+
+  let assetId = editingAssetId;
+  if (assetId) {
+    await sbUpdate('assets', assetId, { name, category, currency });
+  } else {
+    const inserted = await sbInsert('assets', { name, category, currency, is_archived: false });
+    assetId = inserted.id;
+  }
+
+  try {
+    await sbInsert('asset_snapshots', { asset_id: assetId, value, snapshot_date: date });
+  } catch (err) {
+    if (err.code === '23505') {
+      const existing = allAssetSnapshots.find((s) => s.asset_id === assetId && s.snapshot_date === date);
+      if (existing) await sbUpdate('asset_snapshots', existing.id, { value });
+    } else {
+      throw err;
+    }
+  }
+
+  cancelWealthAssetEdit();
+  await loadWealthData();
+});
+
+/* ---------- 負債 ---------- */
+let editingLiabilityId = null;
+
+function renderWealthLiabilitiesScreen() {
+  const container = document.getElementById('w-liabilities-full-list');
+  container.innerHTML = '';
+  const active = allLiabilities.filter((l) => !l.is_archived);
+  if (!active.length) {
+    const hint = document.createElement('p');
+    hint.className = 'w-empty-hint';
+    hint.textContent = '還沒有負債紀錄';
+    container.appendChild(hint);
+    return;
+  }
+  active.forEach((l) => {
+    const snap = latestSnapshot(allLiabilitySnapshots, 'liability_id', l.id);
+    const row = document.createElement('div');
+    row.className = 'w-item-row';
+
+    const info = document.createElement('div');
+    const name = document.createElement('div');
+    name.className = 'w-item-name';
+    name.textContent = l.name;
+    const meta = document.createElement('div');
+    const metaParts = [WEALTH_LIABILITY_TYPE_LABELS[l.type] || l.type];
+    if (l.interest_rate) metaParts.push('利率 ' + l.interest_rate + '%');
+    if (l.monthly_payment) metaParts.push('每月 ' + fmtMoney(l.monthly_payment));
+    meta.className = 'w-item-meta';
+    meta.textContent = metaParts.join(' · ');
+    info.appendChild(name);
+    info.appendChild(meta);
+
+    const valueEl = document.createElement('div');
+    valueEl.className = 'w-item-value w-negative';
+    valueEl.textContent = fmtMoney(snap ? Number(snap.remaining_balance) : 0);
+
+    const actions = document.createElement('div');
+    actions.className = 'w-item-actions';
+    const editBtn = document.createElement('button');
+    editBtn.textContent = '編輯';
+    editBtn.addEventListener('click', () => startEditWealthLiability(l));
+    const archiveBtn = document.createElement('button');
+    archiveBtn.textContent = '停用';
+    archiveBtn.addEventListener('click', async () => {
+      await sbUpdate('liabilities', l.id, { is_archived: true });
+      await loadWealthData();
+    });
+    actions.appendChild(editBtn);
+    actions.appendChild(archiveBtn);
+
+    row.appendChild(info);
+    row.appendChild(valueEl);
+    row.appendChild(actions);
+    container.appendChild(row);
+  });
+}
+
+function startEditWealthLiability(l) {
+  editingLiabilityId = l.id;
+  document.getElementById('w-liability-name').value = l.name;
+  document.getElementById('w-liability-type').value = l.type;
+  document.getElementById('w-liability-rate').value = l.interest_rate || '';
+  document.getElementById('w-liability-payment').value = l.monthly_payment || '';
+  const snap = latestSnapshot(allLiabilitySnapshots, 'liability_id', l.id);
+  document.getElementById('w-liability-balance').value = snap ? snap.remaining_balance : '';
+  document.getElementById('w-liability-date').value = todayDateStr();
+  document.getElementById('w-liability-form-submit').textContent = '更新負債';
+  document.getElementById('w-liability-form-cancel').style.display = 'block';
+}
+
+function cancelWealthLiabilityEdit() {
+  editingLiabilityId = null;
+  document.getElementById('w-liability-form').reset();
+  document.getElementById('w-liability-date').value = todayDateStr();
+  document.getElementById('w-liability-form-submit').textContent = '新增負債';
+  document.getElementById('w-liability-form-cancel').style.display = 'none';
+}
+
+document.getElementById('w-liability-form-cancel').addEventListener('click', cancelWealthLiabilityEdit);
+
+document.getElementById('w-liability-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = document.getElementById('w-liability-name').value.trim();
+  const type = document.getElementById('w-liability-type').value;
+  const rateVal = document.getElementById('w-liability-rate').value;
+  const paymentVal = document.getElementById('w-liability-payment').value;
+  const balance = parseFloat(document.getElementById('w-liability-balance').value);
+  const date = document.getElementById('w-liability-date').value;
+  if (!name || !balance || balance <= 0 || !date) return;
+
+  const fields = {
+    name,
+    type,
+    interest_rate: rateVal ? parseFloat(rateVal) : null,
+    monthly_payment: paymentVal ? parseFloat(paymentVal) : null
+  };
+
+  let liabilityId = editingLiabilityId;
+  if (liabilityId) {
+    await sbUpdate('liabilities', liabilityId, fields);
+  } else {
+    const inserted = await sbInsert('liabilities', { ...fields, is_archived: false });
+    liabilityId = inserted.id;
+  }
+
+  try {
+    await sbInsert('liability_snapshots', { liability_id: liabilityId, remaining_balance: balance, snapshot_date: date });
+  } catch (err) {
+    if (err.code === '23505') {
+      const existing = allLiabilitySnapshots.find((s) => s.liability_id === liabilityId && s.snapshot_date === date);
+      if (existing) await sbUpdate('liability_snapshots', existing.id, { remaining_balance: balance });
+    } else {
+      throw err;
+    }
+  }
+
+  cancelWealthLiabilityEdit();
+  await loadWealthData();
+});
 
 /* ---------- 金額格式化 ---------- */
 const CURRENCY_PREFIX = { TWD: '$', USD: 'US$', EUR: '€', CNY: 'CN¥', JPY: 'JP¥' };
