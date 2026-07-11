@@ -377,7 +377,7 @@ function switchTab(tab) {
   }
 }
 
-document.querySelectorAll('.nav-btn').forEach((btn) => {
+document.querySelectorAll('.nav-btn[data-tab]').forEach((btn) => {
   btn.addEventListener('click', () => {
     if (btn.dataset.tab === 'add' && editingTransactionId) {
       cancelEditTransaction();
@@ -385,6 +385,35 @@ document.querySelectorAll('.nav-btn').forEach((btn) => {
     switchTab(btn.dataset.tab);
   });
 });
+
+/* ---------- 財富管家 / 記帳 雙模式切換 ---------- */
+function switchMode(mode) {
+  document.getElementById('ledger-shell').style.display = mode === 'ledger' ? '' : 'none';
+  document.getElementById('wealth-shell').style.display = mode === 'wealth' ? '' : 'none';
+  if (mode === 'wealth') {
+    document.getElementById('wealth-date').textContent = new Date().toLocaleDateString('zh-Hant-TW', { year: 'numeric', month: 'long', day: 'numeric' });
+    loadWealthData();
+  }
+}
+
+document.getElementById('goto-wealth-btn').addEventListener('click', () => switchMode('wealth'));
+document.getElementById('goto-ledger-btn').addEventListener('click', () => switchMode('ledger'));
+
+function switchWealthTab(tab) {
+  document.querySelectorAll('.w-screen').forEach((s) => s.classList.remove('active'));
+  document.getElementById('screen-wealth-' + tab).classList.add('active');
+  document.querySelectorAll('.w-nav-btn[data-wtab]').forEach((b) => {
+    b.classList.toggle('active', b.dataset.wtab === tab);
+  });
+}
+
+document.querySelectorAll('.w-nav-btn[data-wtab]').forEach((btn) => {
+  btn.addEventListener('click', () => switchWealthTab(btn.dataset.wtab));
+});
+
+async function loadWealthData() {
+  /* 骨架階段先留空，下一步接資產/負債/帳戶資料 */
+}
 
 /* ---------- 金額格式化 ---------- */
 const CURRENCY_PREFIX = { TWD: '$', USD: 'US$', EUR: '€', CNY: 'CN¥', JPY: 'JP¥' };
