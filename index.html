@@ -85,7 +85,7 @@
         <button type="button" class="chart-toggle-btn" id="budget-edit-toggle">設定</button>
       </div>
       <div id="budget-edit-form" class="inline-row" style="display:none; margin-top:8px;">
-        <input type="number" id="budget-amount-input" placeholder="輸入本月預算金額" />
+        <input type="number" id="budget-amount-input" placeholder="輸入本月預算金額" step="0.01" />
         <button type="button" class="primary-btn small" id="budget-save-btn">儲存</button>
       </div>
       <div id="budget-display" style="display:none;">
@@ -149,9 +149,9 @@
 
       <p class="filter-group-label">金額範圍</p>
       <div class="amount-range-row">
-        <input type="number" id="filter-amount-min" placeholder="最低" />
+        <input type="number" id="filter-amount-min" placeholder="最低" step="0.01" />
         <span>～</span>
-        <input type="number" id="filter-amount-max" placeholder="最高" />
+        <input type="number" id="filter-amount-max" placeholder="最高" step="0.01" />
       </div>
 
       <p class="filter-group-label">日期區間</p>
@@ -305,7 +305,7 @@
       </select>
 
       <label>期初餘額</label>
-      <input type="number" id="acc-initial" placeholder="0" step="1" />
+      <input type="number" id="acc-initial" placeholder="0" step="0.01" />
 
       <button type="submit" class="primary-btn" id="account-form-submit">新增帳戶</button>
       <button type="button" class="ghost-btn-full" id="account-form-cancel" style="display:none;">取消編輯</button>

@@ -390,9 +390,12 @@ document.querySelectorAll('.nav-btn').forEach((btn) => {
 const CURRENCY_PREFIX = { TWD: '$', USD: 'US$', EUR: '€', CNY: 'CN¥', JPY: 'JP¥' };
 
 function fmtMoney(n, currency) {
-  const rounded = Math.round(n);
-  const prefix = CURRENCY_PREFIX[currency || 'TWD'] || ((currency || 'TWD') + ' ');
-  return prefix + rounded.toLocaleString('zh-Hant-TW');
+  const cur = currency || 'TWD';
+  const prefix = CURRENCY_PREFIX[cur] || (cur + ' ');
+  if (cur === 'TWD') {
+    return prefix + Math.round(n).toLocaleString('zh-Hant-TW');
+  }
+  return prefix + n.toLocaleString('zh-Hant-TW', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function accountCurrency(accountId) {
