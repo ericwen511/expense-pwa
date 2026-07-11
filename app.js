@@ -704,6 +704,21 @@ function renderWealthTrendChart() {
   container.appendChild(labels);
 }
 
+/* 有輸入股數+每股成本的投資類資產，算出目前市值跟成本的損益(金額+百分比) */
+function buildWealthAssetPnlSub(a, snap) {
+  if (!a.shares || !a.cost_per_share || !snap) return null;
+  const marketValue = Number(snap.value);
+  const costTotal = a.shares * a.cost_per_share;
+  if (costTotal <= 0) return null;
+  const pnl = marketValue - costTotal;
+  const pnlPct = (pnl / costTotal) * 100;
+  const sub = document.createElement('div');
+  sub.className = 'w-item-sub' + (pnl < 0 ? ' w-negative' : '');
+  const sign = pnl >= 0 ? '+' : '';
+  sub.textContent = `${a.shares}股 · 損益 ${sign}${fmtMoney(pnl, a.currency)} (${sign}${pnlPct.toFixed(1)}%)`;
+  return sub;
+}
+
 function renderWealthOverviewAssetList(activeAssets) {
   const container = document.getElementById('w-asset-list');
   container.innerHTML = '';
@@ -727,11 +742,17 @@ function renderWealthOverviewAssetList(activeAssets) {
     meta.textContent = (WEALTH_ASSET_CATEGORY_LABELS[a.category] || a.category) + (snap ? ' · 上次更新 ' + snap.snapshot_date : '');
     info.appendChild(name);
     info.appendChild(meta);
+
+    const valueWrap = document.createElement('div');
     const valueEl = document.createElement('div');
     valueEl.className = 'w-item-value';
     valueEl.textContent = fmtMoney(snap ? Number(snap.value) : 0, a.currency);
+    valueWrap.appendChild(valueEl);
+    const pnlSub = buildWealthAssetPnlSub(a, snap);
+    if (pnlSub) valueWrap.appendChild(pnlSub);
+
     row.appendChild(info);
-    row.appendChild(valueEl);
+    row.appendChild(valueWrap);
     container.appendChild(row);
   });
 }
@@ -803,9 +824,13 @@ function renderWealthAssetsScreen() {
     info.appendChild(name);
     info.appendChild(meta);
 
+    const valueWrap = document.createElement('div');
     const valueEl = document.createElement('div');
     valueEl.className = 'w-item-value';
     valueEl.textContent = fmtMoney(snap ? Number(snap.value) : 0, a.currency);
+    valueWrap.appendChild(valueEl);
+    const pnlSub = buildWealthAssetPnlSub(a, snap);
+    if (pnlSub) valueWrap.appendChild(pnlSub);
 
     const actions = document.createElement('div');
     actions.className = 'w-item-actions';
@@ -822,17 +847,69 @@ function renderWealthAssetsScreen() {
     actions.appendChild(archiveBtn);
 
     row.appendChild(info);
-    row.appendChild(valueEl);
+    row.appendChild(valueWrap);
     row.appendChild(actions);
     container.appendChild(row);
   });
 }
+
+const WEALTH_MARKET_CURRENCY = { tw: 'TWD', us: 'USD', cn: 'CNY' };
+const WEALTH_MARKET_LABELS = { tw: '台股', us: '美股', cn: '陸股' };
+
+function updateWealthAssetCategoryFields() {
+  const isInvestment = document.getElementById('w-asset-category').value === 'investment';
+  document.getElementById('w-asset-stock-fields').style.display = isInvestment ? 'block' : 'none';
+  if (isInvestment) {
+    document.getElementById('w-asset-currency').value = WEALTH_MARKET_CURRENCY[document.getElementById('w-asset-market').value];
+  }
+}
+
+document.getElementById('w-asset-category').addEventListener('change', updateWealthAssetCategoryFields);
+document.getElementById('w-asset-market').addEventListener('change', updateWealthAssetCategoryFields);
+
+document.getElementById('w-asset-fetch-price-btn').addEventListener('click', async () => {
+  const market = document.getElementById('w-asset-market').value;
+  const symbol = document.getElementById('w-asset-symbol').value.trim();
+  const shares = parseFloat(document.getElementById('w-asset-shares').value);
+  const statusEl = document.getElementById('w-asset-fetch-status');
+
+  if (market === 'cn') {
+    statusEl.textContent = '陸股目前不支援自動抓取，請手動輸入目前價值';
+    return;
+  }
+  if (!symbol) {
+    statusEl.textContent = '請先輸入股票代碼';
+    return;
+  }
+  statusEl.textContent = '查詢中...';
+  try {
+    const { data, error } = await supabaseClient.functions.invoke('get-stock-price', { body: { market, symbol } });
+    if (error) throw error;
+    if (data.error) {
+      statusEl.textContent = data.error;
+      return;
+    }
+    statusEl.textContent = `${WEALTH_MARKET_LABELS[market]} ${symbol} 最新價格：${fmtMoney(data.price, data.currency)}`;
+    if (shares > 0) {
+      document.getElementById('w-asset-value').value = Math.round(shares * data.price * 100) / 100;
+    }
+    document.getElementById('w-asset-currency').value = data.currency;
+  } catch (err) {
+    statusEl.textContent = '查詢失敗：' + ((err && err.message) || String(err));
+  }
+});
 
 function startEditWealthAsset(a) {
   editingAssetId = a.id;
   document.getElementById('w-asset-name').value = a.name;
   document.getElementById('w-asset-category').value = a.category;
   document.getElementById('w-asset-currency').value = a.currency;
+  document.getElementById('w-asset-market').value = a.market || 'tw';
+  document.getElementById('w-asset-symbol').value = a.stock_symbol || '';
+  document.getElementById('w-asset-shares').value = a.shares || '';
+  document.getElementById('w-asset-cost').value = a.cost_per_share || '';
+  document.getElementById('w-asset-fetch-status').textContent = '';
+  updateWealthAssetCategoryFields();
   const snap = latestSnapshot(allAssetSnapshots, 'asset_id', a.id);
   document.getElementById('w-asset-value').value = snap ? snap.value : '';
   document.getElementById('w-asset-date').value = todayDateStr();
@@ -844,8 +921,10 @@ function cancelWealthAssetEdit() {
   editingAssetId = null;
   document.getElementById('w-asset-form').reset();
   document.getElementById('w-asset-date').value = todayDateStr();
+  document.getElementById('w-asset-fetch-status').textContent = '';
   document.getElementById('w-asset-form-submit').textContent = '新增資產';
   document.getElementById('w-asset-form-cancel').style.display = 'none';
+  updateWealthAssetCategoryFields();
 }
 
 document.getElementById('w-asset-form-cancel').addEventListener('click', cancelWealthAssetEdit);
@@ -859,11 +938,24 @@ document.getElementById('w-asset-form').addEventListener('submit', async (e) => 
   const date = document.getElementById('w-asset-date').value;
   if (!name || !value || value <= 0 || !date) return;
 
+  const isInvestment = category === 'investment';
+  const sharesVal = parseFloat(document.getElementById('w-asset-shares').value);
+  const costVal = parseFloat(document.getElementById('w-asset-cost').value);
+  const assetFields = {
+    name,
+    category,
+    currency,
+    market: isInvestment ? document.getElementById('w-asset-market').value : null,
+    stock_symbol: isInvestment ? (document.getElementById('w-asset-symbol').value.trim() || null) : null,
+    shares: isInvestment && sharesVal > 0 ? sharesVal : null,
+    cost_per_share: isInvestment && costVal > 0 ? costVal : null
+  };
+
   let assetId = editingAssetId;
   if (assetId) {
-    await sbUpdate('assets', assetId, { name, category, currency });
+    await sbUpdate('assets', assetId, assetFields);
   } else {
-    const inserted = await sbInsert('assets', { name, category, currency, is_archived: false });
+    const inserted = await sbInsert('assets', { ...assetFields, is_archived: false });
     assetId = inserted.id;
   }
 

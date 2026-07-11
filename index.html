@@ -474,6 +474,27 @@
             <option value="other">其他</option>
           </select>
 
+          <div id="w-asset-stock-fields" style="display:none;">
+            <label class="w-label">市場</label>
+            <select id="w-asset-market" class="w-input">
+              <option value="tw">台股</option>
+              <option value="us">美股</option>
+              <option value="cn">陸股</option>
+            </select>
+
+            <label class="w-label">股票代碼</label>
+            <input type="text" id="w-asset-symbol" class="w-input" placeholder="台股例如 2330，美股例如 AAPL" />
+
+            <label class="w-label">股數</label>
+            <input type="number" id="w-asset-shares" class="w-input" step="0.0001" placeholder="0" />
+
+            <label class="w-label">每股成本</label>
+            <input type="number" id="w-asset-cost" class="w-input" step="0.0001" placeholder="0" />
+
+            <button type="button" class="w-ghost-btn" id="w-asset-fetch-price-btn">抓取最新股價</button>
+            <p class="w-hint" id="w-asset-fetch-status" style="margin-top:8px;"></p>
+          </div>
+
           <label class="w-label">幣別</label>
           <select id="w-asset-currency" class="w-input">
             <option value="TWD">新台幣 TWD</option>
@@ -483,7 +504,7 @@
             <option value="JPY">日圓 JPY</option>
           </select>
 
-          <label class="w-label">目前價值</label>
+          <label class="w-label" id="w-asset-value-label">目前價值</label>
           <input type="number" id="w-asset-value" class="w-input" step="0.01" placeholder="0" required />
 
           <label class="w-label">日期</label>
