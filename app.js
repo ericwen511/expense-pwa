@@ -1218,9 +1218,15 @@ document.getElementById('import-json-input').addEventListener('change', async (e
 
   if (!confirm('匯入會把備份裡的帳戶/分類/商家/交易新增到目前帳號，確定要匯入嗎？')) return;
 
+  const statusEl = document.getElementById('import-status');
+  statusEl.style.display = 'block';
+  const setStatus = (text) => { statusEl.textContent = text; };
+
   try {
+    setStatus('讀取檔案中...');
     const data = JSON.parse(await file.text());
 
+    setStatus('建立帳戶中...');
     const accountIdMap = {};
     for (const a of (data.accounts || [])) {
       const existing = allAccounts.find((x) => x.name === a.name);
@@ -1238,6 +1244,7 @@ document.getElementById('import-json-input').addEventListener('change', async (e
       accountIdMap[a.id] = inserted.id;
     }
 
+    setStatus('建立分類中...');
     const categoryIdMap = {};
     for (const c of (data.categories || [])) {
       const existing = allCategories.find((x) => x.name === c.name && x.type === c.type);
@@ -1249,6 +1256,7 @@ document.getElementById('import-json-input').addEventListener('change', async (e
       categoryIdMap[c.id] = inserted.id;
     }
 
+    setStatus('建立商家中...');
     const merchantIdMap = {};
     for (const m of (data.merchants || [])) {
       const existing = allMerchants.find((x) => x.name === m.name);
@@ -1260,7 +1268,9 @@ document.getElementById('import-json-input').addEventListener('change', async (e
       merchantIdMap[m.id] = inserted.id;
     }
 
-    for (const t of (data.transactions || [])) {
+    const txList = data.transactions || [];
+    let done = 0;
+    for (const t of txList) {
       const row = txToRow({
         type: t.type,
         amount: t.amount,
@@ -1273,17 +1283,27 @@ document.getElementById('import-json-input').addEventListener('change', async (e
         clientGeneratedId: t.clientGeneratedId || crypto.randomUUID(),
         ledgerId: currentLedgerId
       });
-      if (!row.account_id) continue;
+      done++;
+      if (!row.account_id) {
+        setStatus(`匯入交易中... ${done}/${txList.length}`);
+        continue;
+      }
       try {
         await sbInsertTransaction(row);
       } catch (err) {
         if (!(err && err.code === '23505')) throw err;
       }
+      if (done % 5 === 0 || done === txList.length) {
+        setStatus(`匯入交易中... ${done}/${txList.length}`);
+      }
     }
 
+    setStatus('整理畫面中...');
     await refreshAll();
+    statusEl.style.display = 'none';
     alert('匯入完成！');
   } catch (err) {
+    statusEl.style.display = 'none';
     alert('匯入失敗：' + err.message);
   }
 });
