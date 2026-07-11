@@ -79,6 +79,25 @@
         <span class="summary-value" id="sum-balance">$0</span>
       </div>
     </div>
+    <div class="budget-row" id="budget-row" style="display:none;">
+      <div class="chart-header">
+        <p class="section-title" style="margin:0;">本月預算</p>
+        <button type="button" class="chart-toggle-btn" id="budget-edit-toggle">設定</button>
+      </div>
+      <div id="budget-edit-form" class="inline-row" style="display:none; margin-top:8px;">
+        <input type="number" id="budget-amount-input" placeholder="輸入本月預算金額" />
+        <button type="button" class="primary-btn small" id="budget-save-btn">儲存</button>
+      </div>
+      <div id="budget-display" style="display:none;">
+        <div class="budget-bar-track"><div class="budget-bar-fill" id="budget-bar-fill"></div></div>
+        <div class="budget-numbers">
+          <span>預算 <b id="budget-total">$0</b></span>
+          <span>已用 <b id="budget-used">$0</b></span>
+          <span>剩餘 <b id="budget-remaining">$0</b></span>
+        </div>
+      </div>
+    </div>
+
     <div class="chart-section">
       <div class="chart-header">
         <p class="section-title" style="margin:0;">支出分類佔比</p>

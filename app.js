@@ -164,6 +164,19 @@ async function sbGetAllTransactions() {
   return all.map(txFromRow);
 }
 
+async function sbUpsertBudget(yearMonth, amount) {
+  const { data, error } = await supabaseClient
+    .from('budgets')
+    .upsert(
+      { user_id: currentUserId, ledger_id: currentLedgerId, year_month: yearMonth, amount, updated_at: new Date().toISOString() },
+      { onConflict: 'ledger_id,year_month' }
+    )
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 async function sbGetAllLedgers() {
   const { data, error } = await supabaseClient.from('ledgers').select('*').order('created_at');
   if (error) throw error;
@@ -343,6 +356,7 @@ let allCategories = [];
 let allAccounts = [];
 let allTransactions = [];
 let allMerchants = [];
+let allBudgets = [];
 let currentTxType = 'expense';
 let calcExpr = '0';
 
@@ -442,6 +456,11 @@ async function refreshAll() {
   allCategories = await sbGetAll('categories');
   allAccounts = await sbGetAllInLedger('accounts');
   allMerchants = await sbGetAll('merchants');
+  try {
+    allBudgets = await sbGetAllInLedger('budgets');
+  } catch (err) {
+    allBudgets = [];
+  }
   const synced = await sbGetAllTransactions();
   const pending = (await idbGetAll('pending_transactions'))
     .filter((p) => p.ledgerId === currentLedgerId)
@@ -548,7 +567,70 @@ function renderOverview() {
   filteredList.forEach((t) => list.appendChild(buildTxRow(t, false, true)));
 
   renderCategoryChart(periodTx);
+  renderBudget(expense);
 }
+
+/* ---------- 每月預算 ---------- */
+function renderBudget(expenseTotal) {
+  const row = document.getElementById('budget-row');
+  const editForm = document.getElementById('budget-edit-form');
+  const display = document.getElementById('budget-display');
+
+  if (overviewViewMode !== 'month') {
+    row.style.display = 'none';
+    return;
+  }
+  row.style.display = 'block';
+  editForm.style.display = 'none';
+
+  const budget = allBudgets.find((b) => b.year_month === overviewYearMonth);
+  if (!budget) {
+    display.style.display = 'none';
+    document.getElementById('budget-edit-toggle').textContent = '設定';
+    return;
+  }
+
+  display.style.display = 'block';
+  document.getElementById('budget-edit-toggle').textContent = '修改';
+
+  const total = Number(budget.amount);
+  const remaining = total - expenseTotal;
+  const pctUsed = total > 0 ? Math.min(100, (expenseTotal / total) * 100) : 100;
+  const isOver = remaining < 0;
+
+  document.getElementById('budget-total').textContent = fmtMoney(total);
+  document.getElementById('budget-used').textContent = fmtMoney(expenseTotal);
+  const remainingEl = document.getElementById('budget-remaining');
+  remainingEl.textContent = fmtMoney(remaining);
+  remainingEl.classList.toggle('over-budget', isOver);
+
+  const fillEl = document.getElementById('budget-bar-fill');
+  fillEl.style.width = pctUsed + '%';
+  fillEl.classList.toggle('over-budget', isOver);
+}
+
+document.getElementById('budget-edit-toggle').addEventListener('click', () => {
+  const editForm = document.getElementById('budget-edit-form');
+  const isOpen = editForm.style.display === 'block';
+  if (isOpen) {
+    editForm.style.display = 'none';
+    return;
+  }
+  const budget = allBudgets.find((b) => b.year_month === overviewYearMonth);
+  document.getElementById('budget-amount-input').value = budget ? budget.amount : '';
+  editForm.style.display = 'block';
+});
+
+document.getElementById('budget-save-btn').addEventListener('click', async () => {
+  const amount = Number(document.getElementById('budget-amount-input').value);
+  if (!amount || amount <= 0) return;
+  const saved = await sbUpsertBudget(overviewYearMonth, amount);
+  const idx = allBudgets.findIndex((b) => b.year_month === overviewYearMonth);
+  if (idx >= 0) allBudgets[idx] = saved;
+  else allBudgets.push(saved);
+  document.getElementById('budget-edit-form').style.display = 'none';
+  renderOverview();
+});
 
 document.querySelectorAll('#overview-view-mode .chart-toggle-btn[data-view-mode]').forEach((btn) => {
   btn.addEventListener('click', () => {
