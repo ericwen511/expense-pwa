@@ -283,12 +283,26 @@ button { transition: background-color 0.15s ease, border-color 0.15s ease, color
 }
 
 .filter-group-label {
-  font-size: 12px;
-  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
   margin: 0 0 8px;
 }
 
 .chip-group { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+
+.filter-clear-btn {
+  display: block;
+  width: 100%;
+  background: none;
+  border: 1px solid var(--expense);
+  border-radius: var(--radius);
+  padding: 10px;
+  color: var(--expense);
+  font-weight: 700;
+  cursor: pointer;
+  margin-bottom: 16px;
+}
 
 .chip-btn {
   border: 1px solid var(--border);
@@ -635,6 +649,15 @@ label {
   #overview-view-mode, #screen-overview > .month-nav, #screen-overview > .summary-list { grid-column: 1 / -1; }
   .chart-section { grid-column: 1 / 2; margin-bottom: 0; }
   .overview-list-panel { grid-column: 2 / 3; }
+
+  label { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+
+  #tx-form { display: grid; grid-template-columns: 320px 1fr; align-items: start; gap: 0 32px; }
+  #tx-form > .type-toggle { grid-column: 1 / -1; }
+  .calc-btn { padding: 10px 0; font-size: 15px; }
+  .calc-row { margin-bottom: 6px; }
+
+  .tx-field-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 20px; }
 }
 
 /* 手機上文字放大，方便閱讀（約為原始桌面尺寸的1.3倍） */
@@ -646,12 +669,22 @@ label {
   .ledger-bar select { font-size: 17px; }
   .ledger-add-btn { width: 40px; height: 40px; font-size: 19px; }
   .year-select, .month-select { font-size: 19px; }
-  .summary-row { padding: 14px 18px; }
-  .summary-label { font-size: 19px; }
-  .summary-value { font-size: 28px; }
+  .summary-list {
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--card);
+    box-shadow: var(--shadow-sm);
+  }
+  .summary-row { padding: 9px 16px; border: none; border-radius: 0; box-shadow: none; border-bottom: 1px solid var(--border); }
+  .summary-row:last-child { border-bottom: none; }
+  .summary-label { font-size: 17px; }
+  .summary-value { font-size: 20px; }
 
   .section-title { font-size: 19px; }
 
+  .tx-row { padding: 9px 10px; }
   .tx-title { font-size: 20px; }
   .tx-meta { font-size: 16px; }
   .tx-amount { font-size: 20px; }
@@ -684,7 +717,8 @@ label {
   .action-sheet-title { font-size: 19px; }
   .action-sheet-btn { font-size: 18px; padding: 15px; }
 
-  .filter-group-label { font-size: 15px; }
+  .filter-group-label { font-size: 19px; }
+  .filter-clear-btn { font-size: 17px; padding: 12px; }
   .chip-btn { font-size: 16px; padding: 7px 16px; }
   .amount-range-row span { font-size: 17px; }
 
