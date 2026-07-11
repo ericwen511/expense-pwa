@@ -486,7 +486,7 @@ function populateMonthNavSelectors() {
   const yearSel = document.getElementById('year-select');
   if (!yearSel.options.length) {
     const maxYear = new Date().getFullYear() + 10;
-    for (let y = 2023; y <= maxYear; y++) {
+    for (let y = 2010; y <= maxYear; y++) {
       const opt = document.createElement('option');
       opt.value = String(y);
       opt.textContent = y + '年';
@@ -521,7 +521,7 @@ function renderOverview() {
   const list = document.getElementById('overview-list');
   list.innerHTML = '';
   document.getElementById('overview-empty').style.display = monthTx.length ? 'none' : 'block';
-  monthTx.forEach((t) => list.appendChild(buildTxRow(t, false)));
+  monthTx.forEach((t) => list.appendChild(buildTxRow(t, false, true)));
 
   renderCategoryChart(monthTx);
 }
@@ -658,7 +658,7 @@ function shiftOverviewMonth(delta) {
   const [y, m] = overviewYearMonth.split('-').map(Number);
   const d = new Date(y, m - 1 + delta, 1);
   const next = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-  if (next < '2023-01') return;
+  if (next < '2010-01') return;
   overviewYearMonth = next;
   renderOverview();
 }
@@ -670,7 +670,7 @@ function applyYearMonthSelectors() {
   const y = document.getElementById('year-select').value;
   const m = document.getElementById('month-select').value.padStart(2, '0');
   const next = `${y}-${m}`;
-  if (next < '2023-01') return;
+  if (next < '2010-01') return;
   overviewYearMonth = next;
   renderOverview();
 }
@@ -678,10 +678,23 @@ document.getElementById('year-select').addEventListener('change', applyYearMonth
 document.getElementById('month-select').addEventListener('change', applyYearMonthSelectors);
 
 /* ---------- 交易列表畫面 ---------- */
+let listTypeFilter = 'expense';
+
+document.querySelectorAll('#list-type-toggle .type-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    listTypeFilter = btn.dataset.listType;
+    document.querySelectorAll('#list-type-toggle .type-btn').forEach((b) => {
+      b.classList.toggle('active', b.dataset.listType === listTypeFilter);
+    });
+    renderList();
+  });
+});
+
 function renderList() {
   const keyword = (document.getElementById('search-input').value || '').trim().toLowerCase();
 
   let filtered = allTransactions.filter((t) => {
+    if (t.type !== listTypeFilter) return false;
     if (filterState.merchantIds.length && !filterState.merchantIds.includes(t.merchantId)) return false;
     if (filterState.accountIds.length) {
       const matchesAccount = t.type === 'transfer'
@@ -701,6 +714,9 @@ function renderList() {
     return true;
   });
 
+  const total = filtered.reduce((s, t) => s + t.amount, 0);
+  document.getElementById('list-total-amount').textContent = fmtMoney(total);
+
   const container = document.getElementById('full-list');
   container.innerHTML = '';
   document.getElementById('list-empty').style.display = filtered.length ? 'none' : 'block';
@@ -718,7 +734,7 @@ function renderList() {
   });
 }
 
-function buildTxRow(t, showDelete) {
+function buildTxRow(t, showDelete, showDate) {
   const row = document.createElement('div');
   row.className = 'tx-row';
 
@@ -727,20 +743,23 @@ function buildTxRow(t, showDelete) {
   const mName = merchantName(t.merchantId);
   const title = document.createElement('p');
   title.className = 'tx-title';
-  title.textContent = t.note ? t.note : (mName || categoryName(t.categoryId));
-  const meta = document.createElement('p');
-  meta.className = 'tx-meta';
-  meta.textContent = categoryName(t.categoryId) + (mName ? ' · ' + mName : '') + ' · ' + accountName(t.accountId);
-  info.appendChild(title);
-  info.appendChild(meta);
-
   if (t.type === 'transfer') {
-    title.textContent = t.note ? t.note : '轉帳';
-    meta.textContent = '從 ' + accountName(t.accountId) + ' 轉到 ' + accountName(t.transferToAccountId);
+    title.textContent = '從 ' + accountName(t.accountId) + ' 轉到 ' + accountName(t.transferToAccountId);
+  } else {
+    title.textContent = categoryName(t.categoryId) + (mName ? ' · ' + mName : '') + ' · ' + accountName(t.accountId);
   }
 
-  if (t.pending) {
-    meta.textContent += ' · 待同步';
+  const metaParts = [];
+  if (showDate) metaParts.push(t.date.slice(5).replace('-', '/'));
+  if (t.note) metaParts.push(t.note);
+  if (t.pending) metaParts.push('待同步');
+
+  info.appendChild(title);
+  if (metaParts.length) {
+    const meta = document.createElement('p');
+    meta.className = 'tx-meta';
+    meta.textContent = metaParts.join(' · ');
+    info.appendChild(meta);
   }
 
   const amount = document.createElement('p');
@@ -814,6 +833,8 @@ function populateFormSelectors() {
 
   const accSelect = document.getElementById('tx-account');
   accSelect.innerHTML = accOptions;
+  const cashAccount = activeAccounts.find((a) => a.name === '現金');
+  if (cashAccount) accSelect.value = cashAccount.id;
 
   const transferToSelect = document.getElementById('tx-transfer-to');
   transferToSelect.innerHTML = accOptions;

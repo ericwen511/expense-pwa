@@ -94,6 +94,12 @@
 
   <!-- 交易列表 -->
   <section id="screen-list" class="screen">
+    <div class="type-toggle" id="list-type-toggle">
+      <button type="button" class="type-btn active expense-btn" data-list-type="expense">支出</button>
+      <button type="button" class="type-btn income-btn" data-list-type="income">收入</button>
+      <button type="button" class="type-btn transfer-btn" data-list-type="transfer">轉帳</button>
+    </div>
+
     <div class="search-box">
       <input type="text" id="search-input" placeholder="搜尋備註、分類..." />
     </div>
@@ -132,6 +138,11 @@
         <button type="button" id="filter-save-preset-btn" class="primary-btn small">儲存</button>
       </div>
       <div id="filter-preset-list" class="chip-group"></div>
+    </div>
+
+    <div class="summary-row" style="margin-bottom:14px;">
+      <span class="summary-label">加總</span>
+      <span class="summary-value" id="list-total-amount">$0</span>
     </div>
 
     <div id="full-list" class="tx-list"></div>
