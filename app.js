@@ -693,19 +693,6 @@ document.getElementById('chart-bar-btn').addEventListener('click', () => {
   renderOverview();
 });
 
-function shiftOverviewMonth(delta) {
-  const step = overviewViewMode === 'year' ? delta * 12 : delta;
-  const [y, m] = overviewYearMonth.split('-').map(Number);
-  const d = new Date(y, m - 1 + step, 1);
-  const next = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-  if (next < '2010-01') return;
-  overviewYearMonth = next;
-  renderOverview();
-}
-
-document.getElementById('month-prev').addEventListener('click', () => shiftOverviewMonth(-1));
-document.getElementById('month-next').addEventListener('click', () => shiftOverviewMonth(1));
-
 function applyYearMonthSelectors() {
   const y = document.getElementById('year-select').value;
   const m = document.getElementById('month-select').value.padStart(2, '0');

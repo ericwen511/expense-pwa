@@ -61,10 +61,8 @@
       <button type="button" class="chart-toggle-btn" data-view-mode="year">按年</button>
     </div>
     <div class="month-nav">
-      <button type="button" id="month-prev" class="month-nav-btn">‹</button>
       <select id="year-select" class="year-select"></select>
       <select id="month-select" class="month-select"></select>
-      <button type="button" id="month-next" class="month-nav-btn">›</button>
     </div>
     <div class="summary-list">
       <div class="summary-row">
@@ -311,11 +309,26 @@
 </div>
 
 <nav class="bottom-nav" id="bottom-nav" style="display:none;">
-  <button class="nav-btn active" data-tab="overview"><i class="icon">⌂</i><span>總覽</span></button>
-  <button class="nav-btn" data-tab="accounts"><i class="icon">$</i><span>帳戶</span></button>
-  <button class="nav-btn" data-tab="list"><i class="icon">≡</i><span>列表</span></button>
-  <button class="nav-btn" data-tab="add"><i class="icon">＋</i><span>新增</span></button>
-  <button class="nav-btn" data-tab="categories"><i class="icon">⚙</i><span>管理</span></button>
+  <button class="nav-btn active" data-tab="overview">
+    <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7"/><path d="M9 22V12h6v10"/><path d="M5 10v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10"/></svg></span>
+    <span>總覽</span>
+  </button>
+  <button class="nav-btn" data-tab="accounts">
+    <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+    <span>帳戶</span>
+  </button>
+  <button class="nav-btn" data-tab="list">
+    <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></span>
+    <span>列表</span>
+  </button>
+  <button class="nav-btn" data-tab="add">
+    <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg></span>
+    <span>新增</span>
+  </button>
+  <button class="nav-btn" data-tab="categories">
+    <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
+    <span>管理</span>
+  </button>
 </nav>
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
