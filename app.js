@@ -650,7 +650,8 @@ function buildBarChart(entries, total) {
 
     const value = document.createElement('span');
     value.className = 'bar-value';
-    value.textContent = fmtMoney(e.amount);
+    const pct = Math.round((e.amount / total) * 100);
+    value.textContent = `${fmtMoney(e.amount)} (${pct}%)`;
 
     row.appendChild(label);
     row.appendChild(track);
@@ -822,6 +823,14 @@ function buildTxRow(t, showDelete, showDate) {
     actions.appendChild(delBtn);
 
     row.appendChild(actions);
+  }
+
+  if (!t.pending) {
+    row.classList.add('tx-row-clickable');
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('.tx-actions')) return;
+      startEditTransaction(t);
+    });
   }
 
   return row;
