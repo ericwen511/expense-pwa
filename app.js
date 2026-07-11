@@ -103,6 +103,7 @@ function txToRow(t) {
     account_id: t.accountId,
     merchant_id: t.merchantId || null,
     transfer_to_account_id: t.transferToAccountId || null,
+    transfer_to_amount: t.transferToAmount || null,
     transaction_date: t.date,
     note: t.note || null,
     client_generated_id: t.clientGeneratedId,
@@ -120,6 +121,7 @@ function txFromRow(row) {
     accountId: row.account_id,
     merchantId: row.merchant_id,
     transferToAccountId: row.transfer_to_account_id,
+    transferToAmount: row.transfer_to_amount ? Number(row.transfer_to_amount) : null,
     date: row.transaction_date,
     note: row.note || '',
     clientGeneratedId: row.client_generated_id,
@@ -385,9 +387,26 @@ document.querySelectorAll('.nav-btn').forEach((btn) => {
 });
 
 /* ---------- 金額格式化 ---------- */
-function fmtMoney(n) {
+const CURRENCY_PREFIX = { TWD: '$', USD: 'US$', EUR: '€', CNY: 'CN¥', JPY: 'JP¥' };
+
+function fmtMoney(n, currency) {
   const rounded = Math.round(n);
-  return '$' + rounded.toLocaleString('zh-Hant-TW');
+  const prefix = CURRENCY_PREFIX[currency || 'TWD'] || ((currency || 'TWD') + ' ');
+  return prefix + rounded.toLocaleString('zh-Hant-TW');
+}
+
+function accountCurrency(accountId) {
+  const acc = allAccounts.find((a) => a.id === accountId);
+  return (acc && acc.currency) || 'TWD';
+}
+
+/* 總覽是台幣為主的月度總結，外幣帳戶的交易不計入(避免不同幣別金額直接相加造成誤導)，
+   外幣交易要看的話請到「帳戶」看餘額或「列表」查交易紀錄 */
+function isTwdTransaction(t) {
+  if (t.type === 'transfer') {
+    return accountCurrency(t.accountId) === 'TWD' && accountCurrency(t.transferToAccountId) === 'TWD';
+  }
+  return accountCurrency(t.accountId) === 'TWD';
 }
 
 function todayDateStr() {
@@ -437,6 +456,7 @@ function updateCalcDisplay() {
   const result = evalExpr(calcExpr);
   document.getElementById('tx-amount-display').textContent = String(result);
   document.getElementById('tx-amount').value = result;
+  updateExchangePreview();
 }
 
 function resetCalc() {
@@ -539,7 +559,7 @@ function accountBalance(accountId) {
   allTransactions.forEach((t) => {
     if (t.type === 'transfer') {
       if (t.accountId === accountId) total -= t.amount;
-      if (t.transferToAccountId === accountId) total += t.amount;
+      if (t.transferToAccountId === accountId) total += (t.transferToAmount || t.amount);
     } else if (t.accountId === accountId) {
       total += (t.type === 'income' ? t.amount : -t.amount);
     }
@@ -588,9 +608,10 @@ function renderOverview() {
   document.getElementById('month-select').value = String(Number(m));
   document.getElementById('month-select').style.display = overviewViewMode === 'year' ? 'none' : 'inline-block';
 
-  const periodTx = overviewViewMode === 'year'
+  const periodTx = (overviewViewMode === 'year'
     ? allTransactions.filter((t) => t.date.slice(0, 4) === y)
-    : allTransactions.filter((t) => t.date.slice(0, 7) === overviewYearMonth);
+    : allTransactions.filter((t) => t.date.slice(0, 7) === overviewYearMonth)
+  ).filter(isTwdTransaction);
 
   const expense = periodTx.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
   const income = periodTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
@@ -916,6 +937,9 @@ function buildTxRow(t, showDelete, showDate) {
 
   const metaParts = [];
   if (showDate) metaParts.push(t.date.slice(5).replace('-', '/'));
+  if (t.type === 'transfer' && t.transferToAmount) {
+    metaParts.push('匯入 ' + fmtMoney(t.transferToAmount, accountCurrency(t.transferToAccountId)));
+  }
   if (t.note) metaParts.push(t.note);
   if (t.pending) metaParts.push('待同步');
 
@@ -930,7 +954,7 @@ function buildTxRow(t, showDelete, showDate) {
   const isFuture = t.date > todayDateStr();
   const amount = document.createElement('p');
   amount.className = 'tx-amount ' + (t.type === 'expense' ? 'expense' : t.type === 'income' ? 'income' : 'transfer') + (isFuture ? ' future' : '');
-  amount.textContent = (t.type === 'expense' ? '-' : t.type === 'income' ? '+' : '') + fmtMoney(t.amount).replace('$', '$');
+  amount.textContent = (t.type === 'expense' ? '-' : t.type === 'income' ? '+' : '') + fmtMoney(t.amount, accountCurrency(t.accountId));
   if (isFuture) row.classList.add('tx-row-future');
 
   row.appendChild(info);
@@ -992,7 +1016,56 @@ function setTxType(type) {
   document.getElementById('tx-account-label').textContent = isTransfer ? '轉出帳戶' : '帳戶';
 
   populateFormSelectors();
+  updateTransferExchangeRow();
 }
+
+/* 匯率一律採台灣銀行慣用的「1單位外幣＝多少台幣」報價方式(例如美金匯率31.5)。
+   台幣換外幣要除以匯率，外幣換台幣要乘以匯率；兩邊都不是台幣時退回單純相乘 */
+function computeTransferToAmount(amount, rate, fromCurrency, toCurrency) {
+  if (fromCurrency === 'TWD' && toCurrency !== 'TWD') return amount / rate;
+  if (toCurrency === 'TWD' && fromCurrency !== 'TWD') return amount * rate;
+  return amount * rate;
+}
+
+function updateTransferExchangeRow() {
+  const row = document.getElementById('tx-exchange-rate-row');
+  if (currentTxType !== 'transfer') {
+    row.style.display = 'none';
+    return;
+  }
+  const fromCurrency = accountCurrency(document.getElementById('tx-account').value);
+  const toCurrency = accountCurrency(document.getElementById('tx-transfer-to').value);
+  if (fromCurrency !== toCurrency) {
+    row.style.display = 'block';
+    const label = document.getElementById('tx-exchange-rate-label');
+    const foreign = fromCurrency === 'TWD' ? toCurrency : (toCurrency === 'TWD' ? fromCurrency : null);
+    label.textContent = foreign
+      ? `匯率（1${foreign}兌換多少台幣，例如1美金=31.5台幣就輸入31.5）`
+      : `匯率（1${fromCurrency}兌換多少${toCurrency}）`;
+    updateExchangePreview();
+  } else {
+    row.style.display = 'none';
+    document.getElementById('tx-exchange-rate').value = '';
+    document.getElementById('tx-exchange-preview').textContent = '';
+  }
+}
+
+function updateExchangePreview() {
+  const row = document.getElementById('tx-exchange-rate-row');
+  if (row.style.display === 'none') return;
+  const rate = parseFloat(document.getElementById('tx-exchange-rate').value);
+  const amount = parseFloat(document.getElementById('tx-amount').value) || 0;
+  const fromCurrency = accountCurrency(document.getElementById('tx-account').value);
+  const toCurrency = accountCurrency(document.getElementById('tx-transfer-to').value);
+  const preview = document.getElementById('tx-exchange-preview');
+  preview.textContent = (rate > 0 && amount > 0)
+    ? `匯入約 ${fmtMoney(computeTransferToAmount(amount, rate, fromCurrency, toCurrency), toCurrency)}`
+    : '';
+}
+
+document.getElementById('tx-account').addEventListener('change', updateTransferExchangeRow);
+document.getElementById('tx-transfer-to').addEventListener('change', updateTransferExchangeRow);
+document.getElementById('tx-exchange-rate').addEventListener('input', updateExchangePreview);
 
 document.getElementById('btn-expense').addEventListener('click', () => setTxType('expense'));
 document.getElementById('btn-income').addEventListener('click', () => setTxType('income'));
@@ -1043,12 +1116,24 @@ document.getElementById('tx-form').addEventListener('submit', async (e) => {
       alert('轉出帳戶跟轉入帳戶不能相同');
       return;
     }
+    let transferToAmount = null;
+    if (document.getElementById('tx-exchange-rate-row').style.display !== 'none') {
+      const rate = parseFloat(document.getElementById('tx-exchange-rate').value);
+      if (!rate || rate <= 0) {
+        alert('請輸入匯率');
+        return;
+      }
+      const fromCurrency = accountCurrency(accountId);
+      const toCurrency = accountCurrency(transferToAccountId);
+      transferToAmount = Math.round(computeTransferToAmount(amount, rate, fromCurrency, toCurrency) * 100) / 100;
+    }
     record = {
       type: 'transfer',
       amount: amount,
       categoryId: null,
       accountId: accountId,
       transferToAccountId: transferToAccountId,
+      transferToAmount: transferToAmount,
       merchantId: null,
       date: document.getElementById('tx-date').value,
       note: document.getElementById('tx-note').value.trim()
@@ -1176,6 +1261,13 @@ function startEditTransaction(t) {
     ensureAccountOption(document.getElementById('tx-transfer-to'), t.transferToAccountId);
     document.getElementById('tx-account').value = t.accountId;
     document.getElementById('tx-transfer-to').value = t.transferToAccountId;
+    updateTransferExchangeRow();
+    if (t.transferToAmount) {
+      const fromCurrency = accountCurrency(t.accountId);
+      const impliedRate = fromCurrency === 'TWD' ? (t.amount / t.transferToAmount) : (t.transferToAmount / t.amount);
+      document.getElementById('tx-exchange-rate').value = Math.round(impliedRate * 10000) / 10000;
+      updateExchangePreview();
+    }
   } else {
     document.getElementById('tx-category').value = t.categoryId;
     ensureAccountOption(document.getElementById('tx-account'), t.accountId);
@@ -1314,7 +1406,7 @@ function renderRecurringList() {
 
     const amountEl = document.createElement('p');
     amountEl.className = 'account-balance';
-    amountEl.textContent = (rule.type === 'expense' ? '-' : rule.type === 'income' ? '+' : '') + fmtMoney(rule.amount);
+    amountEl.textContent = (rule.type === 'expense' ? '-' : rule.type === 'income' ? '+' : '') + fmtMoney(rule.amount, accountCurrency(rule.account_id));
 
     const actions = document.createElement('div');
     actions.className = 'cat-actions';
@@ -1363,13 +1455,13 @@ function renderAccountsScreen() {
     name.textContent = a.name + (a.is_archived ? '（已停用）' : '');
     const meta = document.createElement('p');
     meta.className = 'account-meta';
-    meta.textContent = accountTypeLabels[a.type] || a.type;
+    meta.textContent = (accountTypeLabels[a.type] || a.type) + (a.currency && a.currency !== 'TWD' ? ' · ' + a.currency : '');
     info.appendChild(name);
     info.appendChild(meta);
 
     const balance = document.createElement('p');
     balance.className = 'account-balance';
-    balance.textContent = fmtMoney(accountBalance(a.id));
+    balance.textContent = fmtMoney(accountBalance(a.id), a.currency);
 
     const actions = document.createElement('div');
     actions.className = 'cat-actions';
@@ -1398,6 +1490,7 @@ function startEditAccount(a) {
   editingAccountId = a.id;
   document.getElementById('acc-name').value = a.name;
   document.getElementById('acc-type').value = a.type;
+  document.getElementById('acc-currency').value = a.currency || 'TWD';
   document.getElementById('acc-initial').value = a.initial_balance || 0;
   document.getElementById('account-form-submit').textContent = '更新帳戶';
   document.getElementById('account-form-cancel').style.display = 'inline-block';
@@ -1417,12 +1510,13 @@ document.getElementById('account-form').addEventListener('submit', async (e) => 
   const name = document.getElementById('acc-name').value.trim();
   if (!name) return;
   const type = document.getElementById('acc-type').value;
+  const currency = document.getElementById('acc-currency').value;
   const initial_balance = parseFloat(document.getElementById('acc-initial').value) || 0;
 
   if (editingAccountId) {
-    await sbUpdate('accounts', editingAccountId, { name, type, initial_balance });
+    await sbUpdate('accounts', editingAccountId, { name, type, currency, initial_balance });
   } else {
-    await sbInsert('accounts', { name, type, initial_balance, is_archived: false, ledger_id: currentLedgerId });
+    await sbInsert('accounts', { name, type, currency, initial_balance, is_archived: false, ledger_id: currentLedgerId });
   }
   cancelEditAccount();
   await refreshAll();

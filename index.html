@@ -241,6 +241,12 @@
             <select id="tx-transfer-to"></select>
           </div>
 
+          <div id="tx-exchange-rate-row" style="display:none;">
+            <label id="tx-exchange-rate-label">匯率</label>
+            <input type="number" id="tx-exchange-rate" step="0.0001" placeholder="例如 31.5" />
+            <p class="hint-text" id="tx-exchange-preview"></p>
+          </div>
+
           <div id="tx-merchant-row">
             <label>商家（選填）</label>
             <div class="inline-row">
@@ -287,6 +293,15 @@
         <option value="bank">銀行帳戶</option>
         <option value="credit_card">信用卡</option>
         <option value="other">其他</option>
+      </select>
+
+      <label>幣別</label>
+      <select id="acc-currency">
+        <option value="TWD">新台幣 TWD</option>
+        <option value="USD">美金 USD</option>
+        <option value="EUR">歐元 EUR</option>
+        <option value="CNY">人民幣 CNY</option>
+        <option value="JPY">日圓 JPY</option>
       </select>
 
       <label>期初餘額</label>
