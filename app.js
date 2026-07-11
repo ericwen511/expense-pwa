@@ -146,13 +146,22 @@ async function sbSoftDeleteTransaction(id) {
 }
 
 async function sbGetAllTransactions() {
-  const { data, error } = await supabaseClient
-    .from('transactions')
-    .select('*')
-    .eq('ledger_id', currentLedgerId)
-    .is('deleted_at', null);
-  if (error) throw error;
-  return data.map(txFromRow);
+  const pageSize = 1000;
+  let from = 0;
+  let all = [];
+  while (true) {
+    const { data, error } = await supabaseClient
+      .from('transactions')
+      .select('*')
+      .eq('ledger_id', currentLedgerId)
+      .is('deleted_at', null)
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    all = all.concat(data);
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+  return all.map(txFromRow);
 }
 
 async function sbGetAllLedgers() {
