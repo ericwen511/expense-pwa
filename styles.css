@@ -128,7 +128,7 @@ button { transition: background-color 0.15s ease, border-color 0.15s ease, color
 }
 
 .month-nav-btn {
-  background: var(--card);
+  background: none;
   border: 1px solid var(--border);
   border-radius: 999px;
   width: 32px;
@@ -137,7 +137,6 @@ button { transition: background-color 0.15s ease, border-color 0.15s ease, color
   font-size: 16px;
   cursor: pointer;
   flex-shrink: 0;
-  box-shadow: var(--shadow-sm);
 }
 
 .month-nav-btn:active { transform: scale(0.92); }
@@ -588,9 +587,62 @@ label {
 .nav-btn.active { color: var(--primary); }
 .nav-btn.active .icon { transform: translateY(-2px); }
 
-@media (min-width: 600px) {
+@media (min-width: 600px) and (max-width: 767px) {
   .app-main { padding: 24px; }
   .bottom-nav { max-width: 480px; left: 50%; transform: translateX(-50%); border-radius: 16px 16px 0 0; border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
+}
+
+/* 桌面/平板：左側邊欄導覽 + 內容區加寬 */
+@media (min-width: 768px) {
+  body { padding-bottom: 0; padding-left: 220px; }
+
+  .app-header, .ledger-bar { padding-left: 32px; padding-right: 32px; }
+  .ledger-bar { max-width: 1040px; margin: 0 auto; }
+
+  .app-main {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 32px;
+  }
+
+  .bottom-nav {
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: auto;
+    width: 220px;
+    max-width: none;
+    height: 100vh;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
+    gap: 4px;
+    padding: 88px 14px 14px;
+    border-top: none;
+    border-right: 1px solid var(--border);
+    border-radius: 0;
+    box-shadow: 4px 0 24px rgba(20, 30, 25, 0.05);
+  }
+
+  .nav-btn {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-size: 15px;
+  }
+  .nav-btn .icon { font-size: 19px; }
+  .nav-btn.active { background: var(--primary-light); }
+  .nav-btn.active .icon { transform: none; }
+
+  .summary-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .summary-row { flex-direction: column; align-items: flex-start; gap: 6px; }
+
+  #screen-overview { display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; }
+  #overview-view-mode, #screen-overview > .month-nav, #screen-overview > .summary-list { grid-column: 1 / -1; }
+  .chart-section { grid-column: 1 / 2; margin-bottom: 0; }
+  .overview-list-panel { grid-column: 2 / 3; }
 }
 
 /* 手機上文字放大，方便閱讀（約為原始桌面尺寸的1.3倍） */

@@ -91,14 +91,16 @@
       <div id="category-chart"></div>
     </div>
 
-    <p class="section-title" id="overview-list-title">當月交易</p>
-    <div class="type-toggle" id="overview-type-toggle">
-      <button type="button" class="type-btn active expense-btn" data-overview-type="expense">支出</button>
-      <button type="button" class="type-btn income-btn" data-overview-type="income">收入</button>
-      <button type="button" class="type-btn transfer-btn" data-overview-type="transfer">轉帳</button>
+    <div class="overview-list-panel">
+      <p class="section-title" id="overview-list-title">當月交易</p>
+      <div class="type-toggle" id="overview-type-toggle">
+        <button type="button" class="type-btn active expense-btn" data-overview-type="expense">支出</button>
+        <button type="button" class="type-btn income-btn" data-overview-type="income">收入</button>
+        <button type="button" class="type-btn transfer-btn" data-overview-type="transfer">轉帳</button>
+      </div>
+      <div id="overview-list" class="tx-list"></div>
+      <p class="empty-hint" id="overview-empty" style="display:none;">還沒有任何紀錄，點下方「新增」開始記帳。</p>
     </div>
-    <div id="overview-list" class="tx-list"></div>
-    <p class="empty-hint" id="overview-empty" style="display:none;">還沒有任何紀錄，點下方「新增」開始記帳。</p>
   </section>
 
   <!-- 交易列表 -->
