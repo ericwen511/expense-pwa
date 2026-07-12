@@ -636,6 +636,11 @@ body.ledger-readonly .edit-control { display: none !important; }
 .nav-btn.active .icon { transform: translateY(-2px); }
 .nav-btn.active .icon svg { stroke-width: 2.4; }
 
+/* 平板（桌面版排版但螢幕夠大）：整體放大2倍，試試看空間夠不夠用 */
+@media (min-width: 768px) and (max-width: 1400px) {
+  body { zoom: 2; }
+}
+
 @media (min-width: 600px) and (max-width: 767px) {
   .app-main { padding: 24px; }
   .bottom-nav { max-width: 480px; left: 50%; transform: translateX(-50%); border-radius: 16px 16px 0 0; border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
