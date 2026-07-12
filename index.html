@@ -360,6 +360,181 @@
     <p class="hint-text" id="import-status" style="display:none;"></p>
   </section>
 
+  <!-- 出差/旅遊行程 -->
+  <section id="screen-trips" class="screen">
+    <div id="trip-list-view">
+      <p class="section-title">出差/旅遊行程</p>
+      <div id="trip-list" class="account-list"></div>
+
+      <p class="section-title" style="margin-top:20px;" id="trip-form-title">新增行程</p>
+      <form id="trip-form">
+        <label>名稱</label>
+        <input type="text" id="trip-name" placeholder="例如：東京出差" required />
+
+        <label>類型</label>
+        <select id="trip-type">
+          <option value="business">出差</option>
+          <option value="personal" selected>私人旅遊</option>
+        </select>
+
+        <label>起始日期</label>
+        <input type="date" id="trip-start-date" />
+
+        <label>結束日期</label>
+        <input type="date" id="trip-end-date" />
+
+        <label>目的地（選填）</label>
+        <input type="text" id="trip-destination" placeholder="例如：東京" />
+
+        <label>幣別</label>
+        <select id="trip-currency">
+          <option value="TWD">新台幣 TWD</option>
+          <option value="USD">美金 USD</option>
+          <option value="EUR">歐元 EUR</option>
+          <option value="CNY">人民幣 CNY</option>
+          <option value="JPY">日圓 JPY</option>
+        </select>
+
+        <label>備註（選填）</label>
+        <textarea id="trip-note" rows="2"></textarea>
+
+        <button type="submit" class="primary-btn" id="trip-form-submit">新增行程</button>
+        <button type="button" class="ghost-btn-full" id="trip-form-cancel" style="display:none;">取消編輯</button>
+      </form>
+    </div>
+
+    <div id="trip-detail-view" style="display:none;">
+      <button type="button" class="ghost-btn-full" id="trip-back-btn">← 返回行程列表</button>
+
+      <p class="section-title" id="trip-detail-name" style="margin-top:16px;"></p>
+      <p class="hint-text" id="trip-detail-meta"></p>
+      <p class="hint-text" id="trip-detail-total"></p>
+
+      <div class="inline-row">
+        <button type="button" class="ghost-btn-full" id="trip-edit-btn">編輯行程</button>
+        <button type="button" class="ghost-btn-full danger" id="trip-delete-btn">刪除行程</button>
+      </div>
+      <button type="button" class="primary-btn" id="trip-settle-btn" style="display:none;">結束行程，記一筆到記帳</button>
+      <p class="hint-text" id="trip-settle-status"></p>
+
+      <div class="type-toggle" id="trip-subtab-toggle" style="margin-top:16px;">
+        <button type="button" class="type-btn active" data-subtab="expenses">花費</button>
+        <button type="button" class="type-btn" data-subtab="attractions">景點</button>
+        <button type="button" class="type-btn" data-subtab="transportation">交通</button>
+        <button type="button" class="type-btn" data-subtab="lodging">食宿</button>
+        <button type="button" class="type-btn" data-subtab="notes">記事</button>
+      </div>
+
+      <div id="trip-subtab-expenses" class="trip-subtab">
+        <div id="trip-expense-list" class="account-list"></div>
+        <form id="trip-expense-form">
+          <label>金額</label>
+          <input type="number" id="trip-expense-amount" step="0.01" placeholder="0" required />
+          <label>幣別</label>
+          <select id="trip-expense-currency">
+            <option value="TWD">新台幣 TWD</option>
+            <option value="USD">美金 USD</option>
+            <option value="EUR">歐元 EUR</option>
+            <option value="CNY">人民幣 CNY</option>
+            <option value="JPY">日圓 JPY</option>
+          </select>
+          <label>分類</label>
+          <select id="trip-expense-category">
+            <option value="交通">交通</option>
+            <option value="住宿">住宿</option>
+            <option value="餐飲">餐飲</option>
+            <option value="景點門票">景點門票</option>
+            <option value="購物">購物</option>
+            <option value="其他">其他</option>
+          </select>
+          <label>日期</label>
+          <input type="date" id="trip-expense-date" />
+          <label>地點/商家（選填）</label>
+          <input type="text" id="trip-expense-place" />
+          <label>備註（選填）</label>
+          <input type="text" id="trip-expense-note" />
+          <button type="submit" class="primary-btn small">新增花費</button>
+        </form>
+      </div>
+
+      <div id="trip-subtab-attractions" class="trip-subtab" style="display:none;">
+        <div id="trip-attraction-list" class="account-list"></div>
+        <form id="trip-attraction-form">
+          <label>名稱</label>
+          <input type="text" id="trip-attraction-name" required />
+          <label>造訪日期</label>
+          <input type="date" id="trip-attraction-date" />
+          <label>地址（選填）</label>
+          <input type="text" id="trip-attraction-address" />
+          <label>評分（選填，1-5）</label>
+          <input type="number" id="trip-attraction-rating" min="1" max="5" />
+          <label>心得（選填）</label>
+          <textarea id="trip-attraction-note" rows="2"></textarea>
+          <button type="submit" class="primary-btn small">新增景點</button>
+        </form>
+      </div>
+
+      <div id="trip-subtab-transportation" class="trip-subtab" style="display:none;">
+        <div id="trip-transportation-list" class="account-list"></div>
+        <form id="trip-transportation-form">
+          <label>方式</label>
+          <select id="trip-transportation-mode">
+            <option value="飛機">飛機</option>
+            <option value="高鐵">高鐵</option>
+            <option value="火車">火車</option>
+            <option value="捷運">捷運</option>
+            <option value="計程車">計程車</option>
+            <option value="租車">租車</option>
+            <option value="其他">其他</option>
+          </select>
+          <label>出發地（選填）</label>
+          <input type="text" id="trip-transportation-from" />
+          <label>目的地（選填）</label>
+          <input type="text" id="trip-transportation-to" />
+          <label>出發時間（選填）</label>
+          <input type="datetime-local" id="trip-transportation-depart" />
+          <label>抵達時間（選填）</label>
+          <input type="datetime-local" id="trip-transportation-arrive" />
+          <label>班次/確認號碼（選填）</label>
+          <input type="text" id="trip-transportation-ref" />
+          <label>備註（選填）</label>
+          <input type="text" id="trip-transportation-note" />
+          <button type="submit" class="primary-btn small">新增交通紀錄</button>
+        </form>
+      </div>
+
+      <div id="trip-subtab-lodging" class="trip-subtab" style="display:none;">
+        <div id="trip-lodging-list" class="account-list"></div>
+        <form id="trip-lodging-form">
+          <label>名稱</label>
+          <input type="text" id="trip-lodging-name" required />
+          <label>入住日期</label>
+          <input type="date" id="trip-lodging-checkin" />
+          <label>退房日期</label>
+          <input type="date" id="trip-lodging-checkout" />
+          <label>地址（選填）</label>
+          <input type="text" id="trip-lodging-address" />
+          <label>確認號碼（選填）</label>
+          <input type="text" id="trip-lodging-ref" />
+          <label>備註（選填）</label>
+          <input type="text" id="trip-lodging-note" />
+          <button type="submit" class="primary-btn small">新增食宿</button>
+        </form>
+      </div>
+
+      <div id="trip-subtab-notes" class="trip-subtab" style="display:none;">
+        <div id="trip-note-list" class="account-list"></div>
+        <form id="trip-note-form">
+          <label>日期（選填）</label>
+          <input type="date" id="trip-note-date" />
+          <label>內容</label>
+          <textarea id="trip-note-content" rows="3" required></textarea>
+          <button type="submit" class="primary-btn small">新增記事</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
 </main>
 
 <div id="action-sheet-overlay" class="action-sheet-overlay" style="display:none;">
@@ -391,6 +566,10 @@
   <button class="nav-btn edit-control" data-tab="categories">
     <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
     <span>管理</span>
+  </button>
+  <button class="nav-btn" data-tab="trips">
+    <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span>
+    <span>行程</span>
   </button>
   <button class="nav-btn" id="goto-wealth-btn">
     <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>

@@ -506,6 +506,9 @@ function switchTab(tab) {
   if (tab === 'add') {
     document.getElementById('tx-date').value = new Date().toISOString().slice(0, 10);
   }
+  if (tab === 'trips') {
+    loadTrips();
+  }
 }
 
 document.querySelectorAll('.nav-btn[data-tab]').forEach((btn) => {
@@ -3049,6 +3052,451 @@ document.getElementById('reset-submit-btn').addEventListener('click', async () =
 
 document.getElementById('logout-btn').addEventListener('click', async () => {
   await supabaseClient.auth.signOut();
+});
+
+/* ---------- 出差/旅遊行程 ---------- */
+let allTrips = [];
+let currentTripId = null;
+let editingTripId = null;
+let tripExpenses = [];
+let tripAttractions = [];
+let tripTransportation = [];
+let tripLodging = [];
+let tripNotes = [];
+
+async function loadTrips() {
+  const { data, error } = await supabaseClient.from('trips').select('*').order('start_date', { ascending: false });
+  allTrips = error ? [] : data;
+  renderTripList();
+}
+
+function renderTripList() {
+  const container = document.getElementById('trip-list');
+  container.innerHTML = '';
+  const active = allTrips.filter((t) => !t.is_archived);
+  if (!active.length) {
+    const hint = document.createElement('p');
+    hint.className = 'empty-hint';
+    hint.textContent = '還沒有行程紀錄，新增一筆開始記錄';
+    container.appendChild(hint);
+    return;
+  }
+  active.forEach((t) => {
+    const row = document.createElement('div');
+    row.className = 'account-row';
+    row.style.cursor = 'pointer';
+
+    const info = document.createElement('div');
+    info.className = 'account-info';
+    const name = document.createElement('p');
+    name.className = 'account-name';
+    name.textContent = t.name;
+    const meta = document.createElement('p');
+    meta.className = 'account-meta';
+    const typeLabel = t.type === 'business' ? '出差' : '私人旅遊';
+    const dateRange = [t.start_date, t.end_date].filter(Boolean).join(' ~ ');
+    meta.textContent = [typeLabel, dateRange, t.destination].filter(Boolean).join(' · ');
+    info.appendChild(name);
+    info.appendChild(meta);
+
+    row.appendChild(info);
+    row.addEventListener('click', () => openTrip(t.id));
+    container.appendChild(row);
+  });
+}
+
+document.getElementById('trip-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = document.getElementById('trip-name').value.trim();
+  if (!name) return;
+  const fields = {
+    name,
+    type: document.getElementById('trip-type').value,
+    start_date: document.getElementById('trip-start-date').value || null,
+    end_date: document.getElementById('trip-end-date').value || null,
+    destination: document.getElementById('trip-destination').value.trim() || null,
+    currency: document.getElementById('trip-currency').value,
+    note: document.getElementById('trip-note').value.trim() || null
+  };
+  if (editingTripId) {
+    await sbUpdate('trips', editingTripId, fields);
+  } else {
+    await sbInsert('trips', { ...fields, is_archived: false });
+  }
+  cancelEditTrip();
+  await loadTrips();
+});
+
+function cancelEditTrip() {
+  editingTripId = null;
+  document.getElementById('trip-form').reset();
+  document.getElementById('trip-form-submit').textContent = '新增行程';
+  document.getElementById('trip-form-title').textContent = '新增行程';
+  document.getElementById('trip-form-cancel').style.display = 'none';
+}
+document.getElementById('trip-form-cancel').addEventListener('click', cancelEditTrip);
+
+async function openTrip(tripId) {
+  currentTripId = tripId;
+  document.getElementById('trip-list-view').style.display = 'none';
+  document.getElementById('trip-detail-view').style.display = 'block';
+  await loadTripSubData();
+  renderTripDetail();
+  switchTripSubTab('expenses');
+}
+
+document.getElementById('trip-back-btn').addEventListener('click', () => {
+  currentTripId = null;
+  document.getElementById('trip-detail-view').style.display = 'none';
+  document.getElementById('trip-list-view').style.display = 'block';
+});
+
+async function loadTripSubData() {
+  const [ex, att, trans, lodge, notes] = await Promise.all([
+    supabaseClient.from('trip_expenses').select('*').eq('trip_id', currentTripId).order('expense_date'),
+    supabaseClient.from('trip_attractions').select('*').eq('trip_id', currentTripId).order('visit_date'),
+    supabaseClient.from('trip_transportation').select('*').eq('trip_id', currentTripId).order('depart_at'),
+    supabaseClient.from('trip_lodging').select('*').eq('trip_id', currentTripId).order('check_in'),
+    supabaseClient.from('trip_notes').select('*').eq('trip_id', currentTripId).order('note_date')
+  ]);
+  tripExpenses = ex.error ? [] : ex.data;
+  tripAttractions = att.error ? [] : att.data;
+  tripTransportation = trans.error ? [] : trans.data;
+  tripLodging = lodge.error ? [] : lodge.data;
+  tripNotes = notes.error ? [] : notes.data;
+}
+
+function renderTripDetail() {
+  const t = allTrips.find((x) => x.id === currentTripId);
+  if (!t) return;
+  document.getElementById('trip-detail-name').textContent = t.name;
+  const typeLabel = t.type === 'business' ? '出差' : '私人旅遊';
+  const dateRange = [t.start_date, t.end_date].filter(Boolean).join(' ~ ');
+  document.getElementById('trip-detail-meta').textContent = [typeLabel, dateRange, t.destination].filter(Boolean).join(' · ');
+
+  const totals = {};
+  tripExpenses.forEach((e) => { totals[e.currency] = (totals[e.currency] || 0) + Number(e.amount); });
+  const totalText = Object.entries(totals).map(([cur, amt]) => fmtMoney(amt, cur)).join('　') || '尚無花費紀錄';
+  document.getElementById('trip-detail-total').textContent = '總花費：' + totalText;
+
+  document.getElementById('trip-settle-btn').style.display = (t.type === 'personal' && tripExpenses.length > 0) ? 'block' : 'none';
+  document.getElementById('trip-settle-status').textContent = '';
+
+  renderTripExpenses();
+  renderTripAttractions();
+  renderTripTransportation();
+  renderTripLodging();
+  renderTripNotes();
+}
+
+function switchTripSubTab(sub) {
+  document.querySelectorAll('.trip-subtab').forEach((el) => { el.style.display = 'none'; });
+  document.getElementById('trip-subtab-' + sub).style.display = 'block';
+  document.querySelectorAll('#trip-subtab-toggle .type-btn').forEach((b) => {
+    b.classList.toggle('active', b.dataset.subtab === sub);
+  });
+}
+document.querySelectorAll('#trip-subtab-toggle .type-btn').forEach((btn) => {
+  btn.addEventListener('click', () => switchTripSubTab(btn.dataset.subtab));
+});
+
+function buildTripSubRow(nameText, metaText, onDelete) {
+  const row = document.createElement('div');
+  row.className = 'account-row';
+  const info = document.createElement('div');
+  info.className = 'account-info';
+  const name = document.createElement('p');
+  name.className = 'account-name';
+  name.textContent = nameText;
+  const meta = document.createElement('p');
+  meta.className = 'account-meta';
+  meta.textContent = metaText;
+  info.appendChild(name);
+  info.appendChild(meta);
+
+  const delBtn = document.createElement('button');
+  delBtn.type = 'button';
+  delBtn.className = 'ghost-btn';
+  delBtn.textContent = '刪';
+  delBtn.addEventListener('click', onDelete);
+
+  row.appendChild(info);
+  row.appendChild(delBtn);
+  return row;
+}
+
+function renderTripExpenses() {
+  const container = document.getElementById('trip-expense-list');
+  container.innerHTML = '';
+  if (!tripExpenses.length) {
+    const hint = document.createElement('p');
+    hint.className = 'empty-hint';
+    hint.textContent = '還沒有花費紀錄';
+    container.appendChild(hint);
+    return;
+  }
+  tripExpenses.forEach((e) => {
+    const row = buildTripSubRow(
+      e.category + '　' + fmtMoney(e.amount, e.currency) + (e.place ? '・' + e.place : ''),
+      [e.expense_date, e.note].filter(Boolean).join('・'),
+      async () => { await sbDeleteHard('trip_expenses', e.id); await loadTripSubData(); renderTripDetail(); }
+    );
+    container.appendChild(row);
+  });
+}
+
+document.getElementById('trip-expense-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const amount = parseFloat(document.getElementById('trip-expense-amount').value);
+  if (!amount || amount <= 0) return;
+  await sbInsert('trip_expenses', {
+    trip_id: currentTripId,
+    amount,
+    currency: document.getElementById('trip-expense-currency').value,
+    category: document.getElementById('trip-expense-category').value,
+    expense_date: document.getElementById('trip-expense-date').value || todayDateStr(),
+    place: document.getElementById('trip-expense-place').value.trim() || null,
+    note: document.getElementById('trip-expense-note').value.trim() || null
+  });
+  document.getElementById('trip-expense-form').reset();
+  await loadTripSubData();
+  renderTripDetail();
+});
+
+function renderTripAttractions() {
+  const container = document.getElementById('trip-attraction-list');
+  container.innerHTML = '';
+  if (!tripAttractions.length) {
+    const hint = document.createElement('p');
+    hint.className = 'empty-hint';
+    hint.textContent = '還沒有景點紀錄';
+    container.appendChild(hint);
+    return;
+  }
+  tripAttractions.forEach((a) => {
+    const row = buildTripSubRow(
+      a.name + (a.rating ? '　' + '★'.repeat(a.rating) : ''),
+      [a.visit_date, a.address, a.note].filter(Boolean).join('・'),
+      async () => { await sbDeleteHard('trip_attractions', a.id); await loadTripSubData(); renderTripDetail(); }
+    );
+    container.appendChild(row);
+  });
+}
+
+document.getElementById('trip-attraction-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = document.getElementById('trip-attraction-name').value.trim();
+  if (!name) return;
+  const ratingVal = parseInt(document.getElementById('trip-attraction-rating').value, 10);
+  await sbInsert('trip_attractions', {
+    trip_id: currentTripId,
+    name,
+    visit_date: document.getElementById('trip-attraction-date').value || null,
+    address: document.getElementById('trip-attraction-address').value.trim() || null,
+    rating: ratingVal >= 1 && ratingVal <= 5 ? ratingVal : null,
+    note: document.getElementById('trip-attraction-note').value.trim() || null
+  });
+  document.getElementById('trip-attraction-form').reset();
+  await loadTripSubData();
+  renderTripDetail();
+});
+
+function renderTripTransportation() {
+  const container = document.getElementById('trip-transportation-list');
+  container.innerHTML = '';
+  if (!tripTransportation.length) {
+    const hint = document.createElement('p');
+    hint.className = 'empty-hint';
+    hint.textContent = '還沒有交通紀錄';
+    container.appendChild(hint);
+    return;
+  }
+  tripTransportation.forEach((tr) => {
+    const timeText = [tr.depart_at, tr.arrive_at].filter(Boolean).map((d) => new Date(d).toLocaleString('zh-Hant-TW')).join(' → ');
+    const row = buildTripSubRow(
+      tr.mode + ((tr.from_place || tr.to_place) ? '　' + (tr.from_place || '') + ' → ' + (tr.to_place || '') : ''),
+      [timeText, tr.reference_no, tr.note].filter(Boolean).join('・'),
+      async () => { await sbDeleteHard('trip_transportation', tr.id); await loadTripSubData(); renderTripDetail(); }
+    );
+    container.appendChild(row);
+  });
+}
+
+document.getElementById('trip-transportation-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const departVal = document.getElementById('trip-transportation-depart').value;
+  const arriveVal = document.getElementById('trip-transportation-arrive').value;
+  await sbInsert('trip_transportation', {
+    trip_id: currentTripId,
+    mode: document.getElementById('trip-transportation-mode').value,
+    from_place: document.getElementById('trip-transportation-from').value.trim() || null,
+    to_place: document.getElementById('trip-transportation-to').value.trim() || null,
+    depart_at: departVal ? new Date(departVal).toISOString() : null,
+    arrive_at: arriveVal ? new Date(arriveVal).toISOString() : null,
+    reference_no: document.getElementById('trip-transportation-ref').value.trim() || null,
+    note: document.getElementById('trip-transportation-note').value.trim() || null
+  });
+  document.getElementById('trip-transportation-form').reset();
+  await loadTripSubData();
+  renderTripDetail();
+});
+
+function renderTripLodging() {
+  const container = document.getElementById('trip-lodging-list');
+  container.innerHTML = '';
+  if (!tripLodging.length) {
+    const hint = document.createElement('p');
+    hint.className = 'empty-hint';
+    hint.textContent = '還沒有食宿紀錄';
+    container.appendChild(hint);
+    return;
+  }
+  tripLodging.forEach((l) => {
+    const stayRange = [l.check_in, l.check_out].filter(Boolean).join(' ~ ');
+    const row = buildTripSubRow(
+      l.name,
+      [stayRange, l.address, l.reference_no, l.note].filter(Boolean).join('・'),
+      async () => { await sbDeleteHard('trip_lodging', l.id); await loadTripSubData(); renderTripDetail(); }
+    );
+    container.appendChild(row);
+  });
+}
+
+document.getElementById('trip-lodging-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = document.getElementById('trip-lodging-name').value.trim();
+  if (!name) return;
+  await sbInsert('trip_lodging', {
+    trip_id: currentTripId,
+    name,
+    check_in: document.getElementById('trip-lodging-checkin').value || null,
+    check_out: document.getElementById('trip-lodging-checkout').value || null,
+    address: document.getElementById('trip-lodging-address').value.trim() || null,
+    reference_no: document.getElementById('trip-lodging-ref').value.trim() || null,
+    note: document.getElementById('trip-lodging-note').value.trim() || null
+  });
+  document.getElementById('trip-lodging-form').reset();
+  await loadTripSubData();
+  renderTripDetail();
+});
+
+function renderTripNotes() {
+  const container = document.getElementById('trip-note-list');
+  container.innerHTML = '';
+  if (!tripNotes.length) {
+    const hint = document.createElement('p');
+    hint.className = 'empty-hint';
+    hint.textContent = '還沒有記事';
+    container.appendChild(hint);
+    return;
+  }
+  tripNotes.forEach((n) => {
+    const row = buildTripSubRow(
+      n.note_date || '（未指定日期）',
+      n.content,
+      async () => { await sbDeleteHard('trip_notes', n.id); await loadTripSubData(); renderTripDetail(); }
+    );
+    container.appendChild(row);
+  });
+}
+
+document.getElementById('trip-note-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const content = document.getElementById('trip-note-content').value.trim();
+  if (!content) return;
+  await sbInsert('trip_notes', {
+    trip_id: currentTripId,
+    note_date: document.getElementById('trip-note-date').value || null,
+    content
+  });
+  document.getElementById('trip-note-form').reset();
+  await loadTripSubData();
+  renderTripDetail();
+});
+
+document.getElementById('trip-edit-btn').addEventListener('click', () => {
+  const t = allTrips.find((x) => x.id === currentTripId);
+  if (!t) return;
+  editingTripId = t.id;
+  document.getElementById('trip-name').value = t.name;
+  document.getElementById('trip-type').value = t.type;
+  document.getElementById('trip-start-date').value = t.start_date || '';
+  document.getElementById('trip-end-date').value = t.end_date || '';
+  document.getElementById('trip-destination').value = t.destination || '';
+  document.getElementById('trip-currency').value = t.currency;
+  document.getElementById('trip-note').value = t.note || '';
+  document.getElementById('trip-form-submit').textContent = '更新行程';
+  document.getElementById('trip-form-title').textContent = '編輯行程';
+  document.getElementById('trip-form-cancel').style.display = 'inline-block';
+  currentTripId = null;
+  document.getElementById('trip-detail-view').style.display = 'none';
+  document.getElementById('trip-list-view').style.display = 'block';
+});
+
+document.getElementById('trip-delete-btn').addEventListener('click', async () => {
+  const t = allTrips.find((x) => x.id === currentTripId);
+  if (!t) return;
+  if (!confirm(`確定要刪除「${t.name}」這個行程嗎？裡面所有花費/景點/交通/食宿/記事都會一併刪除，無法復原。`)) return;
+  await sbDeleteHard('trips', t.id);
+  currentTripId = null;
+  document.getElementById('trip-detail-view').style.display = 'none';
+  document.getElementById('trip-list-view').style.display = 'block';
+  await loadTrips();
+});
+
+document.getElementById('trip-settle-btn').addEventListener('click', async () => {
+  const t = allTrips.find((x) => x.id === currentTripId);
+  if (!t) return;
+  const statusEl = document.getElementById('trip-settle-status');
+
+  const totals = {};
+  tripExpenses.forEach((e) => { totals[e.currency] = (totals[e.currency] || 0) + Number(e.amount); });
+  const primaryTotal = totals[t.currency] || 0;
+  if (primaryTotal <= 0) {
+    statusEl.textContent = `沒有${t.currency}幣別的花費可以結算，行程幣別設定跟花費幣別對不上時請先確認`;
+    return;
+  }
+  const otherCurrencies = Object.keys(totals).filter((c) => c !== t.currency && totals[c] > 0);
+
+  const marker = `[行程結算:${t.id}]`;
+  const alreadySettled = allTransactions.some((tx) => (tx.note || '').includes(marker));
+  if (alreadySettled) {
+    if (!confirm('這個行程之前已經結算過一次了，確定要再記一筆嗎？（可能會重複計算）')) return;
+  }
+
+  const cashAccount = allAccounts.find((a) => !a.is_archived && a.name === '現金') || allAccounts.find((a) => !a.is_archived);
+  if (!cashAccount) {
+    statusEl.textContent = '目前帳本沒有可用的帳戶，請先到「帳戶」新增一個';
+    return;
+  }
+  let category = allCategories.find((c) => c.type === 'expense' && c.name === '旅遊記錄');
+  if (!category) {
+    category = await sbInsert('categories', { name: '旅遊記錄', type: 'expense' });
+    allCategories.push(category);
+  }
+
+  let note = `${marker} ${t.name} 總花費`;
+  if (otherCurrencies.length) {
+    note += `（另有 ${otherCurrencies.map((c) => fmtMoney(totals[c], c)).join('、')} 未併入，請自行處理）`;
+  }
+
+  await sbInsertTransaction({
+    type: 'expense',
+    amount: primaryTotal,
+    category_id: category.id,
+    account_id: cashAccount.id,
+    merchant_id: null,
+    transfer_to_account_id: null,
+    transaction_date: todayDateStr(),
+    note,
+    client_generated_id: crypto.randomUUID(),
+    ledger_id: currentLedgerId,
+    recurring_rule_id: null
+  });
+
+  const ledgerName = (allLedgers.find((l) => l.id === currentLedgerId) || {}).name || '';
+  statusEl.textContent = `已記一筆 ${fmtMoney(primaryTotal, t.currency)} 到「${ledgerName}」帳本的旅遊記錄分類` + (otherCurrencies.length ? '（其他幣別花費請自行處理）' : '');
+  await refreshAll();
 });
 
 let dataInitialized = false;
