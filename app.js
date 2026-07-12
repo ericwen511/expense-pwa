@@ -482,7 +482,8 @@ function computeWealthAccountBalance(accountId, initialBalance, txList) {
 }
 
 function renderWealthOverview() {
-  const activeAccounts = allWealthAccounts.filter((a) => !a.is_archived);
+  const archivedLedgerIds = new Set(allLedgers.filter((l) => l.is_archived).map((l) => l.id));
+  const activeAccounts = allWealthAccounts.filter((a) => !a.is_archived && !archivedLedgerIds.has(a.ledger_id));
   const twdCash = activeAccounts
     .filter((a) => (a.currency || 'TWD') === 'TWD')
     .reduce((sum, a) => sum + computeWealthAccountBalance(a.id, a.initial_balance), 0);
@@ -2156,7 +2157,8 @@ function renderAccountsScreen() {
   const list = document.getElementById('account-list');
   list.innerHTML = '';
 
-  allAccounts.forEach((a) => {
+  const sortedAccounts = allAccounts.slice().sort((a, b) => (a.is_archived === b.is_archived ? 0 : a.is_archived ? 1 : -1));
+  sortedAccounts.forEach((a) => {
     const row = document.createElement('div');
     row.className = 'account-row' + (a.is_archived ? ' archived' : '');
 
