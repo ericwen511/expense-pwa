@@ -908,6 +908,11 @@ body.ledger-readonly .edit-control { display: none !important; }
 .w-nav-btn .w-icon svg { width: 100%; height: 100%; }
 .w-nav-btn.active { color: var(--w-gold); }
 
+@media (max-width: 599px) {
+  .w-nav-btn { font-size: 13px; padding: 6px 6px; }
+  .w-nav-btn .w-icon { width: 24px; height: 24px; }
+}
+
 @media (max-width: 767px) {
   .w-eyebrow { font-size: 18px; }
   .w-k { font-size: 18px; }
