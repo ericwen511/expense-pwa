@@ -443,7 +443,38 @@ const WEALTH_DONUT_COLORS = { cash: '#6E7C94', investment: '#C9A25D', real_estat
 document.getElementById('w-asset-date').value = todayDateStr();
 document.getElementById('w-liability-date').value = todayDateStr();
 
+let exchangeRates = null; // { USD: 32.04, CNY: 4.72, EUR: 36.6, JPY: 0.198 } → 台幣/單位
+let exchangeRatesFetchedAt = 0;
+
+async function ensureExchangeRates() {
+  const ONE_HOUR = 60 * 60 * 1000;
+  if (exchangeRates && (Date.now() - exchangeRatesFetchedAt) < ONE_HOUR) return;
+  try {
+    const res = await fetch('https://open.er-api.com/v6/latest/USD');
+    const data = await res.json();
+    if (data.result === 'success' && data.rates && data.rates.TWD) {
+      const twdPerUsd = data.rates.TWD;
+      const rates = {};
+      ['USD', 'EUR', 'CNY', 'JPY'].forEach((cur) => {
+        if (data.rates[cur]) rates[cur] = twdPerUsd / data.rates[cur];
+      });
+      exchangeRates = rates;
+      exchangeRatesFetchedAt = Date.now();
+    }
+  } catch (err) {
+    // 抓不到匯率就沿用舊資料（若有），renderWealthOverview 遇到抓不到的幣別會自動跳過
+  }
+}
+
+function convertToTWD(amount, currency) {
+  const cur = currency || 'TWD';
+  if (cur === 'TWD') return amount;
+  if (exchangeRates && exchangeRates[cur]) return amount * exchangeRates[cur];
+  return null;
+}
+
 async function loadWealthData() {
+  await ensureExchangeRates();
   try {
     allAssets = await sbGetAll('assets');
     allAssetSnapshots = await sbGetAll('asset_snapshots');
@@ -484,18 +515,23 @@ function computeWealthAccountBalance(accountId, initialBalance, txList) {
 function renderWealthOverview() {
   const archivedLedgerIds = new Set(allLedgers.filter((l) => l.is_archived).map((l) => l.id));
   const activeAccounts = allWealthAccounts.filter((a) => !a.is_archived && !archivedLedgerIds.has(a.ledger_id));
-  const twdCash = activeAccounts
-    .filter((a) => (a.currency || 'TWD') === 'TWD')
-    .reduce((sum, a) => sum + computeWealthAccountBalance(a.id, a.initial_balance), 0);
+  let fxUnavailable = false;
+  const twdCash = activeAccounts.reduce((sum, a) => {
+    const balance = computeWealthAccountBalance(a.id, a.initial_balance);
+    const converted = convertToTWD(balance, a.currency);
+    if (converted === null) { fxUnavailable = true; return sum; }
+    return sum + converted;
+  }, 0);
 
   const activeAssets = allAssets.filter((a) => !a.is_archived);
   const assetTotalsByCategory = {};
   Object.keys(WEALTH_ASSET_CATEGORY_LABELS).forEach((k) => { assetTotalsByCategory[k] = 0; });
   activeAssets.forEach((a) => {
-    if ((a.currency || 'TWD') !== 'TWD') return;
     const snap = latestSnapshot(allAssetSnapshots, 'asset_id', a.id);
-    const value = snap ? Number(snap.value) : 0;
-    assetTotalsByCategory[a.category] = (assetTotalsByCategory[a.category] || 0) + value;
+    const rawValue = snap ? Number(snap.value) : 0;
+    const converted = convertToTWD(rawValue, a.currency);
+    if (converted === null) { fxUnavailable = true; return; }
+    assetTotalsByCategory[a.category] = (assetTotalsByCategory[a.category] || 0) + converted;
   });
 
   const activeLiabilities = allLiabilities.filter((l) => !l.is_archived);
@@ -507,6 +543,14 @@ function renderWealthOverview() {
   const totalAssets = twdCash + Object.values(assetTotalsByCategory).reduce((s, v) => s + v, 0);
   const netWorth = totalAssets - totalLiabilities;
   const debtRatio = totalAssets > 0 ? (totalLiabilities / totalAssets) * 100 : 0;
+
+  const fxHint = document.getElementById('w-fx-hint');
+  if (fxUnavailable) {
+    fxHint.textContent = '部分外幣目前抓不到即時匯率，暫時沒有計入淨資產（稍後會自動重試）';
+    fxHint.style.display = 'block';
+  } else {
+    fxHint.style.display = 'none';
+  }
 
   document.getElementById('w-net-worth').textContent = fmtMoney(netWorth);
   document.getElementById('w-total-assets').textContent = fmtMoney(totalAssets);
@@ -616,21 +660,27 @@ function buildWealthTrendSeries() {
   const dates = Array.from(dateSet).sort();
   if (!dates.length) return [];
 
-  const twdAssets = allAssets.filter((a) => !a.is_archived && (a.currency || 'TWD') === 'TWD');
+  const archivedLedgerIds = new Set(allLedgers.filter((l) => l.is_archived).map((l) => l.id));
+  const activeAssets = allAssets.filter((a) => !a.is_archived);
   const activeLiabilities = allLiabilities.filter((l) => !l.is_archived);
-  const twdAccounts = allWealthAccounts.filter((a) => !a.is_archived && (a.currency || 'TWD') === 'TWD');
+  const activeAccounts = allWealthAccounts.filter((a) => !a.is_archived && !archivedLedgerIds.has(a.ledger_id));
 
   return dates.map((date) => {
-    const assetsTotal = twdAssets.reduce((sum, a) => {
+    const assetsTotal = activeAssets.reduce((sum, a) => {
       const snap = latestSnapshot(allAssetSnapshots.filter((s) => s.snapshot_date <= date), 'asset_id', a.id);
-      return sum + (snap ? Number(snap.value) : 0);
+      const converted = snap ? convertToTWD(Number(snap.value), a.currency) : 0;
+      return sum + (converted || 0);
     }, 0);
     const liabilitiesTotal = activeLiabilities.reduce((sum, l) => {
       const snap = latestSnapshot(allLiabilitySnapshots.filter((s) => s.snapshot_date <= date), 'liability_id', l.id);
       return sum + (snap ? Number(snap.remaining_balance) : 0);
     }, 0);
     const txUpToDate = allWealthTransactions.filter((t) => t.date <= date);
-    const cashTotal = twdAccounts.reduce((sum, a) => sum + computeWealthAccountBalance(a.id, a.initial_balance, txUpToDate), 0);
+    const cashTotal = activeAccounts.reduce((sum, a) => {
+      const balance = computeWealthAccountBalance(a.id, a.initial_balance, txUpToDate);
+      const converted = convertToTWD(balance, a.currency);
+      return sum + (converted || 0);
+    }, 0);
     return { date, netWorth: cashTotal + assetsTotal - liabilitiesTotal };
   });
 }
@@ -1800,12 +1850,21 @@ function populateFormSelectors() {
   const transferToSelect = document.getElementById('tx-transfer-to');
   transferToSelect.innerHTML = accOptions;
 
-  const merchantSelect = document.getElementById('tx-merchant');
-  const currentMerchant = merchantSelect.value;
-  merchantSelect.innerHTML = '<option value="">不指定</option>' +
-    allMerchants.map((m) => `<option value="${m.id}">${m.name}</option>`).join('');
-  merchantSelect.value = currentMerchant;
+  const merchantHidden = document.getElementById('tx-merchant');
+  const merchantInput = document.getElementById('tx-merchant-input');
+  const merchantDatalist = document.getElementById('tx-merchant-datalist');
+  const currentMerchantId = merchantHidden.value;
+  merchantDatalist.innerHTML = allMerchants.map((m) => `<option value="${m.name}">`).join('');
+  const currentMerchant = allMerchants.find((m) => m.id === currentMerchantId);
+  merchantInput.value = currentMerchant ? currentMerchant.name : '';
+  merchantHidden.value = currentMerchant ? currentMerchant.id : '';
 }
+
+document.getElementById('tx-merchant-input').addEventListener('input', () => {
+  const typed = document.getElementById('tx-merchant-input').value.trim();
+  const match = allMerchants.find((m) => m.name === typed);
+  document.getElementById('tx-merchant').value = match ? match.id : '';
+});
 
 document.getElementById('btn-quick-add-cat').addEventListener('click', () => {
   switchTab('categories');
@@ -1985,6 +2044,8 @@ function startEditTransaction(t) {
     document.getElementById('tx-category').value = t.categoryId;
     ensureAccountOption(document.getElementById('tx-account'), t.accountId);
     document.getElementById('tx-account').value = t.accountId;
+    const editMerchant = allMerchants.find((m) => m.id === t.merchantId);
+    document.getElementById('tx-merchant-input').value = editMerchant ? editMerchant.name : '';
     document.getElementById('tx-merchant').value = t.merchantId || '';
   }
   document.getElementById('tx-form-submit').textContent = '更新交易';

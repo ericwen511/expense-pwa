@@ -254,7 +254,9 @@
           <div id="tx-merchant-row">
             <label>商家（選填）</label>
             <div class="inline-row">
-              <select id="tx-merchant"><option value="">不指定</option></select>
+              <input type="text" id="tx-merchant-input" list="tx-merchant-datalist" placeholder="不指定（輸入文字搜尋）" autocomplete="off" />
+              <datalist id="tx-merchant-datalist"></datalist>
+              <input type="hidden" id="tx-merchant" />
               <button type="button" id="btn-quick-add-merchant" class="ghost-btn" title="新增商家"><i class="icon">＋</i></button>
             </div>
           </div>
@@ -410,8 +412,9 @@
     <section id="screen-wealth-overview" class="w-screen active">
       <div class="w-hero-row">
         <div class="w-card w-hero-card">
-          <div class="w-eyebrow">淨資產（台幣）</div>
+          <div class="w-eyebrow">淨資產（台幣，已折合外幣）</div>
           <div class="w-amount" id="w-net-worth">$0</div>
+          <p class="w-hint" id="w-fx-hint" style="display:none;"></p>
           <div class="w-hero-stat-row">
             <span class="w-k">總資產</span>
             <span class="w-v" id="w-total-assets">$0</span>
@@ -437,7 +440,7 @@
 
       <div class="w-card" style="margin-bottom:20px;">
         <div class="w-section-title">帳戶明細</div>
-        <p class="w-hint">來自記帳系統各帳本的即時餘額，台幣以外的幣別分開列出</p>
+        <p class="w-hint">來自記帳系統各帳本的即時餘額，這裡顯示各帳戶原始幣別；上方淨資產與資產配置已依即時匯率折合台幣</p>
         <div id="w-account-list"></div>
       </div>
 

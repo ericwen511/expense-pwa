@@ -899,6 +899,20 @@ label {
 .w-nav-btn .w-icon svg { width: 100%; height: 100%; }
 .w-nav-btn.active { color: var(--w-gold); }
 
+@media (max-width: 767px) {
+  .w-eyebrow { font-size: 13px; }
+  .w-k { font-size: 13px; }
+  .w-v { font-size: 15px; }
+  .w-section-title { font-size: 15px; }
+  .w-hint { font-size: 13px; }
+  .w-legend-item { font-size: 15px; }
+  .w-item-name { font-size: 16px; }
+  .w-item-meta { font-size: 13px; }
+  .w-item-value { font-size: 16px; }
+  .w-item-sub { font-size: 13px; }
+  .w-empty-hint { font-size: 14px; }
+}
+
 @media (min-width: 768px) {
   .wealth-shell { padding-bottom: 0; padding-left: 220px; }
   .w-header { padding: 28px 40px 8px; }
