@@ -440,6 +440,12 @@
       </div>
 
       <div class="w-card" style="margin-bottom:20px;">
+        <div class="w-section-title">外幣部位（原幣別，未折合台幣）</div>
+        <p class="w-hint">跨帳戶+投資資產加總，方便掌握手上實際持有多少外幣</p>
+        <div id="w-fx-summary-list"></div>
+      </div>
+
+      <div class="w-card" style="margin-bottom:20px;">
         <div class="w-section-title">帳戶明細</div>
         <p class="w-hint">來自記帳系統各帳本的即時餘額，這裡顯示各帳戶原始幣別；上方淨資產與資產配置已依即時匯率折合台幣</p>
         <div id="w-account-list"></div>
@@ -447,7 +453,11 @@
 
       <div class="w-bottom-row">
         <div class="w-card">
-          <div class="w-section-title">資產明細</div>
+          <div class="w-section-title" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+            <span>資產明細</span>
+            <button type="button" class="w-ghost-btn" id="w-refresh-stocks-btn" style="width:auto; margin:0; padding:6px 14px; font-size:13px;">更新所有股價</button>
+          </div>
+          <p class="w-hint" id="w-refresh-stocks-status"></p>
           <div id="w-asset-list"></div>
         </div>
         <div class="w-card">

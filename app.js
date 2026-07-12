@@ -678,6 +678,49 @@ function renderWealthOverview() {
   renderWealthAccountList(activeAccounts);
   renderWealthOverviewAssetList(activeAssets);
   renderWealthOverviewLiabilityList(activeLiabilities);
+  renderWealthForeignCurrencySummary(activeAccounts, activeAssets);
+}
+
+function renderWealthForeignCurrencySummary(activeAccounts, activeAssets) {
+  const container = document.getElementById('w-fx-summary-list');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const totals = {};
+  activeAccounts.forEach((a) => {
+    const cur = a.currency || 'TWD';
+    if (cur === 'TWD') return;
+    totals[cur] = (totals[cur] || 0) + computeWealthAccountBalance(a.id, a.initial_balance);
+  });
+  activeAssets.forEach((a) => {
+    const cur = a.currency || 'TWD';
+    if (cur === 'TWD') return;
+    const snap = latestSnapshot(allAssetSnapshots, 'asset_id', a.id);
+    totals[cur] = (totals[cur] || 0) + (snap ? Number(snap.value) : 0);
+  });
+
+  const entries = Object.entries(totals).filter(([, v]) => v !== 0).sort((a, b) => b[1] - a[1]);
+  if (!entries.length) {
+    const hint = document.createElement('p');
+    hint.className = 'w-empty-hint';
+    hint.textContent = '目前沒有外幣部位';
+    container.appendChild(hint);
+    return;
+  }
+
+  entries.forEach(([cur, total]) => {
+    const row = document.createElement('div');
+    row.className = 'w-legend-item';
+    const label = document.createElement('span');
+    label.className = 'w-legend-label';
+    label.textContent = cur;
+    const value = document.createElement('span');
+    value.className = 'w-legend-value';
+    value.textContent = fmtMoney(total, cur);
+    row.appendChild(label);
+    row.appendChild(value);
+    container.appendChild(row);
+  });
 }
 
 function renderWealthDonut(entries, total) {
@@ -738,8 +781,10 @@ function renderWealthAccountList(activeAccounts) {
   const ledgerNameMap = {};
   allLedgers.forEach((l) => { ledgerNameMap[l.id] = l.name; });
 
-  activeAccounts.forEach((a) => {
-    const balance = computeWealthAccountBalance(a.id, a.initial_balance);
+  const withBalance = activeAccounts.map((a) => ({ a, balance: computeWealthAccountBalance(a.id, a.initial_balance) }));
+  withBalance.sort((x, y) => (x.balance === 0) - (y.balance === 0));
+
+  withBalance.forEach(({ a, balance }) => {
     const row = document.createElement('div');
     row.className = 'w-item-row';
 
@@ -1061,6 +1106,48 @@ document.getElementById('w-asset-fetch-price-btn').addEventListener('click', asy
   } catch (err) {
     statusEl.textContent = '查詢失敗：' + ((err && err.message) || String(err));
   }
+});
+
+document.getElementById('w-refresh-stocks-btn').addEventListener('click', async () => {
+  const statusEl = document.getElementById('w-refresh-stocks-status');
+  const btn = document.getElementById('w-refresh-stocks-btn');
+  const targets = allAssets.filter((a) => !a.is_archived && a.category === 'investment' && a.stock_symbol && a.market && a.market !== 'cn' && a.shares > 0);
+
+  if (!targets.length) {
+    statusEl.textContent = '沒有可以自動更新的股票資產（需要有代碼跟股數）';
+    return;
+  }
+
+  btn.disabled = true;
+  let okCount = 0;
+  let failCount = 0;
+  const today = todayDateStr();
+
+  for (const a of targets) {
+    statusEl.textContent = `更新中... (${okCount + failCount + 1}/${targets.length}) ${a.name}`;
+    try {
+      const { data, error } = await supabaseClient.functions.invoke('get-stock-price', { body: { market: a.market, symbol: a.stock_symbol } });
+      if (error || data.error) throw new Error((data && data.error) || (error && error.message));
+      const value = Math.round(a.shares * data.price * 100) / 100;
+      try {
+        await sbInsert('asset_snapshots', { asset_id: a.id, value, snapshot_date: today });
+      } catch (err) {
+        if (err.code === '23505') {
+          const existing = allAssetSnapshots.find((s) => s.asset_id === a.id && s.snapshot_date === today);
+          if (existing) await sbUpdate('asset_snapshots', existing.id, { value });
+        } else {
+          throw err;
+        }
+      }
+      okCount += 1;
+    } catch (err) {
+      failCount += 1;
+    }
+  }
+
+  statusEl.textContent = `已更新 ${okCount} 檔股票` + (failCount ? `，${failCount} 檔查詢失敗` : '');
+  btn.disabled = false;
+  await loadWealthData();
 });
 
 function startEditWealthAsset(a) {
