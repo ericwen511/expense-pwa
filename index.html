@@ -26,7 +26,8 @@
 
 <div class="ledger-bar" id="ledger-bar" style="display:none;">
   <select id="ledger-select"></select>
-  <button type="button" id="ledger-add-btn" class="ledger-add-btn">＋</button>
+  <button type="button" id="ledger-add-btn" class="ledger-add-btn edit-control">＋</button>
+  <span id="ledger-readonly-badge" class="badge" style="display:none;">唯讀</span>
 </div>
 
 <!-- 登入/註冊 -->
@@ -86,7 +87,7 @@
     <div class="budget-row" id="budget-row" style="display:none;">
       <div class="chart-header">
         <p class="section-title" style="margin:0;">本月預算</p>
-        <button type="button" class="chart-toggle-btn" id="budget-edit-toggle">設定</button>
+        <button type="button" class="chart-toggle-btn edit-control" id="budget-edit-toggle">設定</button>
       </div>
       <div id="budget-edit-form" class="inline-row" style="display:none; margin-top:8px;">
         <input type="number" id="budget-amount-input" placeholder="輸入本月預算金額" step="0.01" />
@@ -183,7 +184,7 @@
   </section>
 
   <!-- 新增交易 -->
-  <section id="screen-add" class="screen">
+  <section id="screen-add" class="screen edit-control">
     <form id="tx-form">
       <div class="type-toggle">
         <button type="button" id="btn-expense" class="type-btn active expense-btn">支出</button>
@@ -288,8 +289,8 @@
     <p class="section-title">帳戶</p>
     <div id="account-list" class="account-list"></div>
 
-    <p class="section-title" style="margin-top:20px;">新增帳戶</p>
-    <form id="account-form">
+    <p class="section-title edit-control" style="margin-top:20px;">新增帳戶</p>
+    <form id="account-form" class="edit-control">
       <label>名稱</label>
       <input type="text" id="acc-name" placeholder="例如：中信信用卡" required />
 
@@ -319,7 +320,7 @@
   </section>
 
   <!-- 分類管理 -->
-  <section id="screen-categories" class="screen">
+  <section id="screen-categories" class="screen edit-control">
     <p class="section-title">帳本管理</p>
     <p class="hint-text">分類、商家是所有帳本共用的，只有帳戶跟交易分開</p>
     <div id="ledger-list" class="account-list"></div>
@@ -383,11 +384,11 @@
     <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></span>
     <span>列表</span>
   </button>
-  <button class="nav-btn" data-tab="add">
+  <button class="nav-btn edit-control" data-tab="add">
     <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg></span>
     <span>新增</span>
   </button>
-  <button class="nav-btn" data-tab="categories">
+  <button class="nav-btn edit-control" data-tab="categories">
     <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
     <span>管理</span>
   </button>

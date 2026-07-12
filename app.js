@@ -63,7 +63,7 @@ async function sbGetAllInLedger(table) {
 }
 
 async function sbCount(table) {
-  const { count, error } = await supabaseClient.from(table).select('*', { count: 'exact', head: true });
+  const { count, error } = await supabaseClient.from(table).select('*', { count: 'exact', head: true }).eq('user_id', currentUserId);
   if (error) throw error;
   return count || 0;
 }
@@ -206,6 +206,22 @@ async function sbGetAllLedgers() {
   return data;
 }
 
+async function sbGetLedgerShares() {
+  const { data, error } = await supabaseClient.from('ledger_shares').select('*').eq('owner_user_id', currentUserId);
+  if (error) throw error;
+  return data;
+}
+
+async function sbInsertLedgerShare(ledgerId, viewerEmail) {
+  const { data, error } = await supabaseClient
+    .from('ledger_shares')
+    .insert({ ledger_id: ledgerId, owner_user_id: currentUserId, viewer_email: viewerEmail })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 /* 離線時新增的交易先進本機佇列，恢復連線後再補上傳 */
 async function flushPendingQueue() {
   const pending = await idbGetAll('pending_transactions');
@@ -265,41 +281,69 @@ async function seedAccountsForCurrentLedger() {
 /* ---------- 帳本(ledgers)：同一帳號可切換多本互相隔離的帳 ---------- */
 let currentLedgerId = null;
 let allLedgers = [];
+let allLedgerShares = [];
 
 function ledgerStorageKey() {
   return 'expensePwa_currentLedger_' + currentUserId;
 }
 
+function isReadOnlyLedger() {
+  const l = allLedgers.find((x) => x.id === currentLedgerId);
+  return !!l && l.user_id !== currentUserId;
+}
+
+function applyReadOnlyMode() {
+  const readOnly = isReadOnlyLedger();
+  document.body.classList.toggle('ledger-readonly', readOnly);
+  document.getElementById('ledger-readonly-badge').style.display = readOnly ? 'inline-block' : 'none';
+}
+
 async function initLedgers() {
   allLedgers = await sbGetAllLedgers();
-  if (!allLedgers.length) {
+  if (!allLedgers.some((l) => l.user_id === currentUserId)) {
     const inserted = await sbInsert('ledgers', { name: '個人帳本', currency: 'TWD', is_archived: false });
-    allLedgers = [inserted];
+    allLedgers.push(inserted);
+  }
+  try {
+    allLedgerShares = await sbGetLedgerShares();
+  } catch (err) {
+    allLedgerShares = [];
   }
   const saved = localStorage.getItem(ledgerStorageKey());
   const active = allLedgers.filter((l) => !l.is_archived);
   const found = allLedgers.find((l) => l.id === saved && !l.is_archived);
-  currentLedgerId = found ? found.id : (active[0] || allLedgers[0]).id;
+  const ownActive = active.filter((l) => l.user_id === currentUserId);
+  currentLedgerId = found ? found.id : (ownActive[0] || active[0] || allLedgers[0]).id;
   localStorage.setItem(ledgerStorageKey(), currentLedgerId);
+  applyReadOnlyMode();
 }
 
 async function reloadLedgers() {
   allLedgers = await sbGetAllLedgers();
+  try {
+    allLedgerShares = await sbGetLedgerShares();
+  } catch (err) {
+    allLedgerShares = [];
+  }
   renderLedgerSelect();
   renderLedgerManagement();
+  applyReadOnlyMode();
 }
 
 function renderLedgerSelect() {
   const sel = document.getElementById('ledger-select');
   const active = allLedgers.filter((l) => !l.is_archived);
-  sel.innerHTML = active.map((l) => `<option value="${l.id}">${l.name}</option>`).join('');
+  sel.innerHTML = active.map((l) => `<option value="${l.id}">${l.name}${l.user_id === currentUserId ? '' : '（分享・唯讀）'}</option>`).join('');
   sel.value = currentLedgerId;
 }
 
 async function switchLedger(ledgerId) {
   currentLedgerId = ledgerId;
   localStorage.setItem(ledgerStorageKey(), currentLedgerId);
-  await seedAccountsForCurrentLedger();
+  applyReadOnlyMode();
+  if (!isReadOnlyLedger()) {
+    await seedAccountsForCurrentLedger();
+  }
   await refreshAll();
   renderLedgerSelect();
 }
@@ -324,6 +368,7 @@ function renderLedgerManagement() {
   list.innerHTML = '';
 
   allLedgers.forEach((l) => {
+    const owned = l.user_id === currentUserId;
     const row = document.createElement('div');
     row.className = 'account-row' + (l.is_archived ? ' archived' : '');
 
@@ -331,47 +376,114 @@ function renderLedgerManagement() {
     info.className = 'account-info';
     const name = document.createElement('p');
     name.className = 'account-name';
-    name.textContent = l.name + (l.is_archived ? '（已封存）' : '') + (l.id === currentLedgerId ? '（使用中）' : '');
+    name.textContent = l.name + (l.is_archived ? '（已封存）' : '') + (l.id === currentLedgerId ? '（使用中）' : '') + (owned ? '' : '（分享給你・唯讀）');
     info.appendChild(name);
-
-    const actions = document.createElement('div');
-    actions.className = 'cat-actions';
-
-    const editBtn = document.createElement('button');
-    editBtn.textContent = '編輯';
-    editBtn.addEventListener('click', async () => {
-      const newName = prompt('修改帳本名稱', l.name);
-      if (newName === null) return;
-      const trimmed = newName.trim();
-      if (!trimmed) return;
-      await sbUpdate('ledgers', l.id, { name: trimmed });
-      await reloadLedgers();
-    });
-    actions.appendChild(editBtn);
-
-    const toggleBtn = document.createElement('button');
-    toggleBtn.textContent = l.is_archived ? '啟用' : '封存';
-    toggleBtn.addEventListener('click', async () => {
-      const willArchive = !l.is_archived;
-      const activeCount = allLedgers.filter((x) => !x.is_archived).length;
-      if (willArchive && activeCount <= 1) {
-        alert('至少要保留一本啟用中的帳本');
-        return;
-      }
-      await sbUpdate('ledgers', l.id, { is_archived: willArchive });
-      if (willArchive && l.id === currentLedgerId) {
-        allLedgers = await sbGetAllLedgers();
-        const nextActive = allLedgers.find((x) => !x.is_archived);
-        await switchLedger(nextActive.id);
-      }
-      await reloadLedgers();
-    });
-    actions.appendChild(toggleBtn);
-
     row.appendChild(info);
-    row.appendChild(actions);
+
+    if (owned) {
+      const actions = document.createElement('div');
+      actions.className = 'cat-actions';
+
+      const editBtn = document.createElement('button');
+      editBtn.textContent = '編輯';
+      editBtn.addEventListener('click', async () => {
+        const newName = prompt('修改帳本名稱', l.name);
+        if (newName === null) return;
+        const trimmed = newName.trim();
+        if (!trimmed) return;
+        await sbUpdate('ledgers', l.id, { name: trimmed });
+        await reloadLedgers();
+      });
+      actions.appendChild(editBtn);
+
+      const toggleBtn = document.createElement('button');
+      toggleBtn.textContent = l.is_archived ? '啟用' : '封存';
+      toggleBtn.addEventListener('click', async () => {
+        const willArchive = !l.is_archived;
+        const activeCount = allLedgers.filter((x) => !x.is_archived && x.user_id === currentUserId).length;
+        if (willArchive && activeCount <= 1) {
+          alert('至少要保留一本啟用中的帳本');
+          return;
+        }
+        await sbUpdate('ledgers', l.id, { is_archived: willArchive });
+        if (willArchive && l.id === currentLedgerId) {
+          allLedgers = await sbGetAllLedgers();
+          const nextActive = allLedgers.find((x) => !x.is_archived && x.user_id === currentUserId);
+          await switchLedger(nextActive.id);
+        }
+        await reloadLedgers();
+      });
+      actions.appendChild(toggleBtn);
+
+      row.appendChild(actions);
+      row.appendChild(buildLedgerShareBox(l));
+    }
+
     list.appendChild(row);
   });
+}
+
+function buildLedgerShareBox(l) {
+  const box = document.createElement('div');
+  box.className = 'ledger-share-box';
+
+  const title = document.createElement('p');
+  title.className = 'ledger-share-title';
+  title.textContent = '分享給（唯讀）';
+  box.appendChild(title);
+
+  const shares = allLedgerShares.filter((s) => s.ledger_id === l.id);
+  if (!shares.length) {
+    const empty = document.createElement('p');
+    empty.className = 'ledger-share-empty';
+    empty.textContent = '尚未分享給任何人';
+    box.appendChild(empty);
+  } else {
+    shares.forEach((s) => {
+      const shareRow = document.createElement('div');
+      shareRow.className = 'ledger-share-row';
+      const email = document.createElement('span');
+      email.textContent = s.viewer_email;
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.textContent = '移除';
+      removeBtn.addEventListener('click', async () => {
+        await sbDeleteHard('ledger_shares', s.id);
+        allLedgerShares = await sbGetLedgerShares();
+        renderLedgerManagement();
+      });
+      shareRow.appendChild(email);
+      shareRow.appendChild(removeBtn);
+      box.appendChild(shareRow);
+    });
+  }
+
+  const inviteRow = document.createElement('div');
+  inviteRow.className = 'inline-row';
+  const emailInput = document.createElement('input');
+  emailInput.type = 'email';
+  emailInput.placeholder = '輸入對方email邀請（對方要已經有帳號）';
+  const inviteBtn = document.createElement('button');
+  inviteBtn.type = 'button';
+  inviteBtn.className = 'ghost-btn';
+  inviteBtn.textContent = '邀請';
+  inviteBtn.addEventListener('click', async () => {
+    const email = emailInput.value.trim();
+    if (!email) return;
+    try {
+      await sbInsertLedgerShare(l.id, email);
+      emailInput.value = '';
+      allLedgerShares = await sbGetLedgerShares();
+      renderLedgerManagement();
+    } catch (err) {
+      alert('邀請失敗：' + ((err && err.message) || String(err)));
+    }
+  });
+  inviteRow.appendChild(emailInput);
+  inviteRow.appendChild(inviteBtn);
+  box.appendChild(inviteRow);
+
+  return box;
 }
 
 /* ---------- 全域狀態 ---------- */
@@ -1729,14 +1841,14 @@ function buildTxRow(t, showDelete, showDate) {
 
     if (!t.pending) {
       const editBtn = document.createElement('button');
-      editBtn.className = 'tx-edit';
+      editBtn.className = 'tx-edit edit-control';
       editBtn.textContent = '編輯';
       editBtn.addEventListener('click', () => startEditTransaction(t));
       actions.appendChild(editBtn);
     }
 
     const delBtn = document.createElement('button');
-    delBtn.className = 'tx-delete';
+    delBtn.className = 'tx-delete edit-control';
     delBtn.textContent = '刪除';
     delBtn.addEventListener('click', async () => {
       if (t.pending) {
@@ -2239,7 +2351,7 @@ function renderAccountsScreen() {
     balance.textContent = fmtMoney(accountBalance(a.id), a.currency);
 
     const actions = document.createElement('div');
-    actions.className = 'cat-actions';
+    actions.className = 'cat-actions edit-control';
 
     const editBtn = document.createElement('button');
     editBtn.textContent = '編輯';
@@ -2860,7 +2972,9 @@ async function initAppData() {
   await openDB();
   await seedDefaultsIfEmpty();
   await initLedgers();
-  await seedAccountsForCurrentLedger();
+  if (!isReadOnlyLedger()) {
+    await seedAccountsForCurrentLedger();
+  }
   renderLedgerSelect();
   await refreshAll();
   document.getElementById('tx-date').value = new Date().toISOString().slice(0, 10);

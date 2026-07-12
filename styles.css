@@ -542,6 +542,15 @@ label {
 
 .account-balance { font-size: 15px; font-weight: 600; flex-shrink: 0; white-space: nowrap; }
 
+.ledger-share-box { flex-basis: 100%; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
+.account-row:has(.ledger-share-box) { flex-wrap: wrap; }
+.ledger-share-title { font-size: 13px; font-weight: 600; margin: 0 0 6px; color: var(--text-secondary); }
+.ledger-share-empty { font-size: 13px; color: var(--text-muted); margin: 0 0 8px; }
+.ledger-share-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; font-size: 14px; }
+.ledger-share-row button { background: none; border: none; color: var(--expense); cursor: pointer; font-size: 13px; }
+
+body.ledger-readonly .edit-control { display: none !important; }
+
 .amount-display {
   background: var(--card);
   border: 1px solid var(--border);
