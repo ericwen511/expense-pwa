@@ -408,7 +408,7 @@
 
       <p class="section-title" id="trip-detail-name" style="margin-top:16px;"></p>
       <p class="hint-text trip-list-meta" id="trip-detail-meta"></p>
-      <p class="trip-total-amount" id="trip-detail-total"></p>
+      <p class="section-title trip-total-amount" id="trip-detail-total"></p>
 
       <div class="inline-row">
         <button type="button" class="ghost-btn-full" id="trip-edit-btn">編輯行程</button>
@@ -424,6 +424,10 @@
         <button type="button" class="type-btn" data-subtab="lodging">食宿</button>
         <button type="button" class="type-btn" data-subtab="notes">記事</button>
         <button type="button" class="type-btn" data-subtab="all">總表</button>
+      </div>
+      <div class="inline-row" id="trip-export-row" style="display:none; margin-top:8px;">
+        <button type="button" class="ghost-btn-full" id="trip-export-pdf-btn">匯出PDF</button>
+        <button type="button" class="ghost-btn-full" id="trip-export-word-btn">匯出Word</button>
       </div>
 
       <div id="trip-subtab-expenses" class="trip-subtab">

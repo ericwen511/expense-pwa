@@ -603,8 +603,15 @@ body.ledger-readonly .edit-control { display: none !important; }
 .ghost-btn-full.danger { border-color: var(--expense); color: var(--expense); }
 
 .trip-list-meta { font-size: 15px !important; }
-.trip-total-amount { font-size: 22px; font-weight: 700; color: var(--expense); margin: 4px 0 14px; }
+.trip-total-amount { color: var(--expense) !important; margin-bottom: 14px; }
 .trip-subtab-heading { display: none; }
+
+#trip-print-area { display: none; }
+@media print {
+  body * { visibility: hidden; }
+  #trip-print-area, #trip-print-area * { visibility: visible; }
+  #trip-print-area { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
+}
 
 .bottom-nav {
   position: fixed;
@@ -839,6 +846,8 @@ body.ledger-readonly .edit-control { display: none !important; }
 .w-k { font-size: 12px; color: var(--w-text-dim); }
 .w-v { font-size: 13px; font-weight: 500; }
 .w-v.w-negative, .w-negative { color: var(--w-rust); }
+.w-pnl-positive { color: var(--w-rust); }
+.w-pnl-negative { color: var(--w-sage); }
 
 .w-section-title { font-size: 13px; font-weight: 600; margin-bottom: 14px; color: var(--w-text); }
 .w-hint { font-size: 12px; color: var(--w-text-dim); margin: -8px 0 14px; }

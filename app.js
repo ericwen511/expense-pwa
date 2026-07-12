@@ -924,7 +924,7 @@ function buildWealthAssetPnlSub(a, snap) {
   const pnl = marketValue - costTotal;
   const pnlPct = (pnl / costTotal) * 100;
   const sub = document.createElement('div');
-  sub.className = 'w-item-sub' + (pnl < 0 ? ' w-negative' : '');
+  sub.className = 'w-item-sub ' + (pnl >= 0 ? 'w-pnl-positive' : 'w-pnl-negative');
   const sign = pnl >= 0 ? '+' : '';
   sub.textContent = `${a.shares}股 · 損益 ${sign}${fmtMoney(pnl, a.currency)} (${sign}${pnlPct.toFixed(1)}%)`;
   return sub;
@@ -3206,6 +3206,7 @@ function switchTripSubTab(sub) {
   document.querySelectorAll('#trip-subtab-toggle .type-btn').forEach((b) => {
     b.classList.toggle('active', b.dataset.subtab === sub);
   });
+  document.getElementById('trip-export-row').style.display = showAll ? 'flex' : 'none';
 }
 document.querySelectorAll('#trip-subtab-toggle .type-btn').forEach((btn) => {
   btn.addEventListener('click', () => switchTripSubTab(btn.dataset.subtab));
@@ -3672,6 +3673,97 @@ document.getElementById('trip-settle-btn').addEventListener('click', async () =>
   const ledgerName = (allLedgers.find((l) => l.id === currentLedgerId) || {}).name || '';
   statusEl.textContent = `已記一筆 ${fmtMoney(primaryTotal, t.currency)} 到「${ledgerName}」帳本的旅遊記錄分類` + (otherCurrencies.length ? '（其他幣別花費請自行處理）' : '');
   await refreshAll();
+});
+
+function escapeHtmlText(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function buildTripSummaryTable(headers, rows) {
+  if (!rows.length) return '<p style="font-family:sans-serif;color:#888;">無資料</p>';
+  let html = '<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;font-family:sans-serif;font-size:13px;margin-bottom:20px;">';
+  html += '<tr style="background:#eee;">' + headers.map((h) => `<th>${escapeHtmlText(h)}</th>`).join('') + '</tr>';
+  rows.forEach((cells) => {
+    html += '<tr>' + cells.map((c) => `<td>${escapeHtmlText(c)}</td>`).join('') + '</tr>';
+  });
+  html += '</table>';
+  return html;
+}
+
+function buildTripSummaryHTML(t) {
+  const typeLabel = t.type === 'business' ? '出差' : '私人旅遊';
+  const dateRange = [t.start_date, t.end_date].filter(Boolean).join(' ~ ');
+  const totals = {};
+  tripExpenses.forEach((e) => { totals[e.currency] = (totals[e.currency] || 0) + Number(e.amount); });
+  const totalText = Object.entries(totals).map(([cur, amt]) => fmtMoney(amt, cur)).join('，') || '無';
+
+  let html = '';
+  html += `<h1 style="font-family:sans-serif;">${escapeHtmlText(t.name)}</h1>`;
+  html += `<p style="font-family:sans-serif;color:#555;">${escapeHtmlText([typeLabel, dateRange, t.destination].filter(Boolean).join(' · '))}</p>`;
+  html += `<p style="font-family:sans-serif;font-weight:bold;color:#c0392b;font-size:18px;">總花費：${escapeHtmlText(totalText)}</p>`;
+
+  html += '<h2 style="font-family:sans-serif;">花費</h2>';
+  html += buildTripSummaryTable(
+    ['日期', '分類', '金額', '地點', '備註'],
+    tripExpenses.map((e) => [e.expense_date, e.category, fmtMoney(e.amount, e.currency), e.place, e.note])
+  );
+
+  html += '<h2 style="font-family:sans-serif;">景點</h2>';
+  html += buildTripSummaryTable(
+    ['日期', '名稱', '評分', '地址', '心得'],
+    tripAttractions.map((a) => [a.visit_date, a.name, a.rating ? '★'.repeat(a.rating) : '', a.address, a.note])
+  );
+
+  html += '<h2 style="font-family:sans-serif;">交通</h2>';
+  html += buildTripSummaryTable(
+    ['方式', '路線', '出發', '抵達', '確認號碼', '備註'],
+    tripTransportation.map((tr) => [tr.mode, (tr.from_place || '') + ' → ' + (tr.to_place || ''), formatTripDateTime24(tr.depart_at), formatTripDateTime24(tr.arrive_at), tr.reference_no, tr.note])
+  );
+
+  html += '<h2 style="font-family:sans-serif;">食宿</h2>';
+  html += buildTripSummaryTable(
+    ['名稱', '入住~退房', '地址', '確認號碼', '備註'],
+    tripLodging.map((l) => [l.name, [l.check_in, l.check_out].filter(Boolean).join(' ~ '), l.address, l.reference_no, l.note])
+  );
+
+  html += '<h2 style="font-family:sans-serif;">記事</h2>';
+  if (!tripNotes.length) {
+    html += '<p style="font-family:sans-serif;color:#888;">無資料</p>';
+  } else {
+    tripNotes.forEach((n) => {
+      html += `<p style="font-family:sans-serif;"><strong>${escapeHtmlText(n.note_date || '')}</strong><br>${escapeHtmlText(n.content).replace(/\n/g, '<br>')}</p>`;
+    });
+  }
+
+  return html;
+}
+
+document.getElementById('trip-export-pdf-btn').addEventListener('click', () => {
+  const t = allTrips.find((x) => x.id === currentTripId);
+  if (!t) return;
+  let printArea = document.getElementById('trip-print-area');
+  if (!printArea) {
+    printArea = document.createElement('div');
+    printArea.id = 'trip-print-area';
+    document.body.appendChild(printArea);
+  }
+  printArea.innerHTML = buildTripSummaryHTML(t);
+  window.print();
+});
+
+document.getElementById('trip-export-word-btn').addEventListener('click', () => {
+  const t = allTrips.find((x) => x.id === currentTripId);
+  if (!t) return;
+  const fullHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtmlText(t.name)}</title></head><body>${buildTripSummaryHTML(t)}</body></html>`;
+  const blob = new Blob(['﻿', fullHtml], { type: 'application/msword' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${t.name || '行程'}.doc`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 });
 
 let dataInitialized = false;
