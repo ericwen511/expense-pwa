@@ -1,5 +1,5 @@
 // Supabase Edge Function: get-stock-price
-// 伺服器端代理抓取台股(TWSE)/美股(Stooq)股價，避免瀏覽器直接呼叫被CORS擋掉
+// 伺服器端代理抓取台股(TWSE)/美股(Yahoo Finance)股價，避免瀏覽器直接呼叫被CORS擋掉
 // 陸股目前不支援，前端會請使用者手動輸入
 
 const corsHeaders = {
@@ -65,18 +65,16 @@ async function fetchTwStockPrice(symbol: string) {
 
 async function fetchUsStockPrice(symbol: string) {
   try {
-    const url = `https://stooq.com/q/l/?s=${encodeURIComponent(symbol.toLowerCase())}.us&f=sd2t2ohlcv&h&e=csv`;
-    const res = await fetch(url);
-    if (!res.ok) return { error: `Stooq 回應失敗 (${res.status})` };
-    const text = await res.text();
-    const lines = text.trim().split("\n");
-    if (lines.length < 2) return { error: `查不到美股代碼 ${symbol} 的股價` };
-    const cols = lines[1].split(",");
-    // 欄位順序: Symbol,Date,Time,Open,High,Low,Close,Volume
-    if (cols[3] === "N/D") return { error: `查不到美股代碼 ${symbol} 的股價` };
-    const close = parseFloat(cols[6]);
-    if (isNaN(close)) return { error: `查不到美股代碼 ${symbol} 的股價` };
-    return { price: close, currency: "USD" };
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol.toUpperCase())}`;
+    const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
+    if (!res.ok) return { error: `查不到美股代碼 ${symbol} 的股價` };
+    const data = await res.json();
+    const meta = data?.chart?.result?.[0]?.meta;
+    const price = meta?.regularMarketPrice;
+    if (typeof price !== "number" || isNaN(price)) {
+      return { error: `查不到美股代碼 ${symbol} 的股價` };
+    }
+    return { price, currency: meta.currency || "USD", name: meta.longName || meta.shortName || symbol };
   } catch (e) {
     return { error: String(e) };
   }
