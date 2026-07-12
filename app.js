@@ -616,7 +616,9 @@ async function loadWealthData() {
 
 function computeWealthAccountBalance(accountId, initialBalance, txList) {
   let total = initialBalance || 0;
+  const today = todayDateStr();
   (txList || allWealthTransactions).forEach((t) => {
+    if (t.date > today) return;
     if (t.type === 'transfer') {
       if (t.accountId === accountId) total -= t.amount;
       if (t.transferToAccountId === accountId) total += (t.transferToAmount || t.amount);
@@ -1527,7 +1529,9 @@ function accountName(id) {
 function accountBalance(accountId) {
   const acc = allAccounts.find((a) => a.id === accountId);
   let total = (acc && acc.initial_balance) ? acc.initial_balance : 0;
+  const today = todayDateStr();
   allTransactions.forEach((t) => {
+    if (t.date > today) return;
     if (t.type === 'transfer') {
       if (t.accountId === accountId) total -= t.amount;
       if (t.transferToAccountId === accountId) total += (t.transferToAmount || t.amount);
