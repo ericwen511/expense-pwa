@@ -407,8 +407,8 @@
       <button type="button" class="ghost-btn-full" id="trip-back-btn">← 返回行程列表</button>
 
       <p class="section-title" id="trip-detail-name" style="margin-top:16px;"></p>
-      <p class="hint-text" id="trip-detail-meta"></p>
-      <p class="hint-text" id="trip-detail-total"></p>
+      <p class="hint-text trip-list-meta" id="trip-detail-meta"></p>
+      <p class="trip-total-amount" id="trip-detail-total"></p>
 
       <div class="inline-row">
         <button type="button" class="ghost-btn-full" id="trip-edit-btn">編輯行程</button>
@@ -417,15 +417,17 @@
       <button type="button" class="primary-btn" id="trip-settle-btn" style="display:none;">結束行程，記一筆到記帳</button>
       <p class="hint-text" id="trip-settle-status"></p>
 
-      <div class="type-toggle" id="trip-subtab-toggle" style="margin-top:16px;">
+      <div class="type-toggle" id="trip-subtab-toggle" style="margin-top:16px; flex-wrap:wrap;">
         <button type="button" class="type-btn active" data-subtab="expenses">花費</button>
         <button type="button" class="type-btn" data-subtab="attractions">景點</button>
         <button type="button" class="type-btn" data-subtab="transportation">交通</button>
         <button type="button" class="type-btn" data-subtab="lodging">食宿</button>
         <button type="button" class="type-btn" data-subtab="notes">記事</button>
+        <button type="button" class="type-btn" data-subtab="all">總表</button>
       </div>
 
       <div id="trip-subtab-expenses" class="trip-subtab">
+        <p class="section-title trip-subtab-heading">花費</p>
         <div id="trip-expense-list" class="account-list"></div>
         <form id="trip-expense-form">
           <label>金額</label>
@@ -453,11 +455,13 @@
           <input type="text" id="trip-expense-place" />
           <label>備註（選填）</label>
           <input type="text" id="trip-expense-note" />
-          <button type="submit" class="primary-btn small">新增花費</button>
+          <button type="submit" class="primary-btn small" id="trip-expense-submit">新增花費</button>
+          <button type="button" class="ghost-btn-full" id="trip-expense-cancel" style="display:none;">取消編輯</button>
         </form>
       </div>
 
       <div id="trip-subtab-attractions" class="trip-subtab" style="display:none;">
+        <p class="section-title trip-subtab-heading">景點</p>
         <div id="trip-attraction-list" class="account-list"></div>
         <form id="trip-attraction-form">
           <label>名稱</label>
@@ -470,11 +474,13 @@
           <input type="number" id="trip-attraction-rating" min="1" max="5" />
           <label>心得（選填）</label>
           <textarea id="trip-attraction-note" rows="2"></textarea>
-          <button type="submit" class="primary-btn small">新增景點</button>
+          <button type="submit" class="primary-btn small" id="trip-attraction-submit">新增景點</button>
+          <button type="button" class="ghost-btn-full" id="trip-attraction-cancel" style="display:none;">取消編輯</button>
         </form>
       </div>
 
       <div id="trip-subtab-transportation" class="trip-subtab" style="display:none;">
+        <p class="section-title trip-subtab-heading">交通</p>
         <div id="trip-transportation-list" class="account-list"></div>
         <form id="trip-transportation-form">
           <label>方式</label>
@@ -491,19 +497,25 @@
           <input type="text" id="trip-transportation-from" />
           <label>目的地（選填）</label>
           <input type="text" id="trip-transportation-to" />
-          <label>出發時間（選填）</label>
-          <input type="datetime-local" id="trip-transportation-depart" />
-          <label>抵達時間（選填）</label>
-          <input type="datetime-local" id="trip-transportation-arrive" />
+          <label>出發日期（選填）</label>
+          <input type="date" id="trip-transportation-depart-date" />
+          <label>出發時間（選填，24小時制）</label>
+          <input type="text" id="trip-transportation-depart-time" placeholder="例如 14:30" pattern="[0-2][0-9]:[0-5][0-9]" inputmode="numeric" />
+          <label>抵達日期（選填）</label>
+          <input type="date" id="trip-transportation-arrive-date" />
+          <label>抵達時間（選填，24小時制）</label>
+          <input type="text" id="trip-transportation-arrive-time" placeholder="例如 16:00" pattern="[0-2][0-9]:[0-5][0-9]" inputmode="numeric" />
           <label>班次/確認號碼（選填）</label>
           <input type="text" id="trip-transportation-ref" />
           <label>備註（選填）</label>
           <input type="text" id="trip-transportation-note" />
-          <button type="submit" class="primary-btn small">新增交通紀錄</button>
+          <button type="submit" class="primary-btn small" id="trip-transportation-submit">新增交通紀錄</button>
+          <button type="button" class="ghost-btn-full" id="trip-transportation-cancel" style="display:none;">取消編輯</button>
         </form>
       </div>
 
       <div id="trip-subtab-lodging" class="trip-subtab" style="display:none;">
+        <p class="section-title trip-subtab-heading">食宿</p>
         <div id="trip-lodging-list" class="account-list"></div>
         <form id="trip-lodging-form">
           <label>名稱</label>
@@ -518,18 +530,21 @@
           <input type="text" id="trip-lodging-ref" />
           <label>備註（選填）</label>
           <input type="text" id="trip-lodging-note" />
-          <button type="submit" class="primary-btn small">新增食宿</button>
+          <button type="submit" class="primary-btn small" id="trip-lodging-submit">新增食宿</button>
+          <button type="button" class="ghost-btn-full" id="trip-lodging-cancel" style="display:none;">取消編輯</button>
         </form>
       </div>
 
       <div id="trip-subtab-notes" class="trip-subtab" style="display:none;">
+        <p class="section-title trip-subtab-heading">記事</p>
         <div id="trip-note-list" class="account-list"></div>
         <form id="trip-note-form">
           <label>日期（選填）</label>
           <input type="date" id="trip-note-date" />
           <label>內容</label>
           <textarea id="trip-note-content" rows="3" required></textarea>
-          <button type="submit" class="primary-btn small">新增記事</button>
+          <button type="submit" class="primary-btn small" id="trip-note-submit">新增記事</button>
+          <button type="button" class="ghost-btn-full" id="trip-note-cancel" style="display:none;">取消編輯</button>
         </form>
       </div>
     </div>

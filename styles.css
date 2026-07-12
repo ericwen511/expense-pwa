@@ -602,6 +602,10 @@ body.ledger-readonly .edit-control { display: none !important; }
 
 .ghost-btn-full.danger { border-color: var(--expense); color: var(--expense); }
 
+.trip-list-meta { font-size: 15px !important; }
+.trip-total-amount { font-size: 22px; font-weight: 700; color: var(--expense); margin: 4px 0 14px; }
+.trip-subtab-heading { display: none; }
+
 .bottom-nav {
   position: fixed;
   bottom: 0;
