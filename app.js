@@ -866,6 +866,7 @@ function updateWealthAssetCategoryFields() {
 
 document.getElementById('w-asset-category').addEventListener('change', updateWealthAssetCategoryFields);
 document.getElementById('w-asset-market').addEventListener('change', updateWealthAssetCategoryFields);
+updateWealthAssetCategoryFields();
 
 document.getElementById('w-asset-fetch-price-btn').addEventListener('click', async () => {
   const market = document.getElementById('w-asset-market').value;
