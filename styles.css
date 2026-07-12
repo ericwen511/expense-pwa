@@ -900,17 +900,17 @@ label {
 .w-nav-btn.active { color: var(--w-gold); }
 
 @media (max-width: 767px) {
-  .w-eyebrow { font-size: 13px; }
-  .w-k { font-size: 13px; }
-  .w-v { font-size: 15px; }
-  .w-section-title { font-size: 15px; }
-  .w-hint { font-size: 13px; }
-  .w-legend-item { font-size: 15px; }
-  .w-item-name { font-size: 16px; }
-  .w-item-meta { font-size: 13px; }
-  .w-item-value { font-size: 16px; }
-  .w-item-sub { font-size: 13px; }
-  .w-empty-hint { font-size: 14px; }
+  .w-eyebrow { font-size: 18px; }
+  .w-k { font-size: 18px; }
+  .w-v { font-size: 21px; }
+  .w-section-title { font-size: 21px; }
+  .w-hint { font-size: 18px; }
+  .w-legend-item { font-size: 21px; }
+  .w-item-name { font-size: 22px; }
+  .w-item-meta { font-size: 18px; }
+  .w-item-value { font-size: 22px; }
+  .w-item-sub { font-size: 18px; }
+  .w-empty-hint { font-size: 20px; }
 }
 
 @media (min-width: 768px) {
