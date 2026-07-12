@@ -846,8 +846,8 @@ body.ledger-readonly .edit-control { display: none !important; }
 .w-k { font-size: 12px; color: var(--w-text-dim); }
 .w-v { font-size: 13px; font-weight: 500; }
 .w-v.w-negative, .w-negative { color: var(--w-rust); }
-.w-pnl-positive { color: var(--w-rust); }
-.w-pnl-negative { color: var(--w-sage); }
+.w-item-sub.w-pnl-positive { color: var(--w-rust); }
+.w-item-sub.w-pnl-negative { color: var(--w-sage); }
 
 .w-section-title { font-size: 13px; font-weight: 600; margin-bottom: 14px; color: var(--w-text); }
 .w-hint { font-size: 12px; color: var(--w-text-dim); margin: -8px 0 14px; }
