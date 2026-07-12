@@ -950,7 +950,10 @@ function renderWealthOverviewAssetList(activeAssets) {
     name.textContent = a.name;
     const meta = document.createElement('div');
     meta.className = 'w-item-meta';
-    meta.textContent = (WEALTH_ASSET_CATEGORY_LABELS[a.category] || a.category) + (snap ? ' · 上次更新 ' + snap.snapshot_date : '');
+    const pricePerShare = (a.shares && snap) ? Number(snap.value) / a.shares : null;
+    meta.textContent = (WEALTH_ASSET_CATEGORY_LABELS[a.category] || a.category)
+      + (pricePerShare != null ? ' · 股價 ' + fmtMoney(pricePerShare, a.currency) : '')
+      + (snap ? ' · 上次更新 ' + snap.snapshot_date : '');
     info.appendChild(name);
     info.appendChild(meta);
 
@@ -1031,7 +1034,10 @@ function renderWealthAssetsScreen() {
     name.textContent = a.name;
     const meta = document.createElement('div');
     meta.className = 'w-item-meta';
-    meta.textContent = (WEALTH_ASSET_CATEGORY_LABELS[a.category] || a.category) + (snap ? ' · 上次更新 ' + snap.snapshot_date : ' · 尚未輸入價值');
+    const pricePerShare = (a.shares && snap) ? Number(snap.value) / a.shares : null;
+    meta.textContent = (WEALTH_ASSET_CATEGORY_LABELS[a.category] || a.category)
+      + (pricePerShare != null ? ' · 股價 ' + fmtMoney(pricePerShare, a.currency) : '')
+      + (snap ? ' · 上次更新 ' + snap.snapshot_date : ' · 尚未輸入價值');
     info.appendChild(name);
     info.appendChild(meta);
 
