@@ -636,11 +636,6 @@ body.ledger-readonly .edit-control { display: none !important; }
 .nav-btn.active .icon { transform: translateY(-2px); }
 .nav-btn.active .icon svg { stroke-width: 2.4; }
 
-/* 平板（桌面版排版但螢幕夠大）：整體放大2倍，試試看空間夠不夠用 */
-@media (min-width: 768px) and (max-width: 1400px) {
-  body { zoom: 2; }
-}
-
 @media (min-width: 600px) and (max-width: 767px) {
   .app-main { padding: 24px; }
   .bottom-nav { max-width: 480px; left: 50%; transform: translateX(-50%); border-radius: 16px 16px 0 0; border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
@@ -949,4 +944,61 @@ body.ledger-readonly .edit-control { display: none !important; }
 
   .w-hero-row { grid-template-columns: 320px 1fr; }
   .w-bottom-row { grid-template-columns: 1fr 1fr; }
+}
+
+/* 平板（走桌面版排版，但螢幕夠大）：文字放大，只調字體大小，
+   不動版面欄寬/排列方向，避免像zoom那樣把可用空間也一起壓縮 */
+@media (min-width: 768px) and (max-width: 1400px) {
+  .app-header h1 { font-size: 24px; }
+  .badge { font-size: 16px; padding: 5px 13px; }
+  .logout-btn { font-size: 15px; padding: 5px 13px; }
+  .ledger-bar select { font-size: 17px; }
+  .ledger-add-btn { width: 40px; height: 40px; font-size: 19px; }
+  .year-select, .month-select { font-size: 19px; }
+  .summary-label { font-size: 17px; }
+  .summary-value { font-size: 20px; }
+
+  .section-title { font-size: 20px; }
+
+  .tx-title { font-size: 19px; }
+  .tx-meta { font-size: 15px; }
+  .tx-amount { font-size: 19px; }
+  .tx-delete, .tx-edit { font-size: 17px; padding: 5px 11px; }
+  .date-group-label { font-size: 15px; }
+  .empty-hint { font-size: 18px; }
+
+  label { font-size: 17px; }
+  .cat-row span { font-size: 19px; }
+  .cat-actions button { font-size: 17px; margin-left: 11px; }
+  .cat-more-btn { font-size: 22px; padding: 5px 12px; }
+
+  .account-name { font-size: 19px; }
+  .account-meta { font-size: 15px; }
+  .account-balance { font-size: 19px; }
+
+  .filter-group-label { font-size: 18px; }
+  .filter-clear-btn { font-size: 16px; padding: 12px; }
+  .chip-btn { font-size: 16px; padding: 7px 16px; }
+
+  .chart-toggle-btn { font-size: 15px; padding: 6px 15px; }
+  .legend-item { font-size: 16px; }
+  .bar-label { width: 90px; font-size: 16px; }
+  .bar-value { width: 130px; font-size: 16px; }
+
+  .nav-btn { font-size: 17px; padding: 14px 18px; }
+  .nav-btn .icon { width: 23px; height: 23px; }
+
+  .w-eyebrow { font-size: 15px; }
+  .w-amount { font-size: 40px; }
+  .w-k { font-size: 15px; }
+  .w-v { font-size: 17px; }
+  .w-section-title { font-size: 17px; }
+  .w-hint { font-size: 15px; }
+  .w-legend-item { font-size: 17px; }
+  .w-item-name { font-size: 18px; }
+  .w-item-meta { font-size: 15px; }
+  .w-item-value { font-size: 18px; }
+  .w-item-sub { font-size: 15px; }
+  .w-empty-hint { font-size: 16px; }
+  .w-nav-btn { font-size: 15px; padding: 14px 16px; }
 }
