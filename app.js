@@ -1590,8 +1590,11 @@ function renderOverview() {
     : allTransactions.filter((t) => t.date.slice(0, 7) === overviewYearMonth)
   ).filter(isTwdTransaction);
 
-  const expense = periodTx.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-  const income = periodTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+  const today = todayDateStr();
+  const occurredTx = periodTx.filter((t) => t.date <= today);
+
+  const expense = occurredTx.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const income = occurredTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
 
   document.getElementById('sum-expense').textContent = fmtMoney(expense);
   document.getElementById('sum-income').textContent = fmtMoney(income);
@@ -1605,7 +1608,7 @@ function renderOverview() {
   document.getElementById('overview-empty').style.display = filteredList.length ? 'none' : 'block';
   filteredList.forEach((t) => list.appendChild(buildTxRow(t, false, true)));
 
-  renderCategoryChart(periodTx);
+  renderCategoryChart(occurredTx);
   renderBudget(expense);
 }
 
