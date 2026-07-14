@@ -471,6 +471,23 @@ label {
 
 .hint-text { font-size: 12px; color: var(--text-muted); margin: -6px 0 8px; }
 
+.about-app-name { font-size: 20px; font-weight: 700; color: var(--primary); margin: 0 0 2px; }
+
+.about-feature-list { margin: 0 0 12px; padding-left: 20px; color: var(--text-primary); }
+.about-feature-list li { margin-bottom: 8px; line-height: 1.5; }
+
+.changelog-list { display: flex; flex-direction: column; gap: 16px; }
+.changelog-entry {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+.changelog-date { font-weight: 700; color: var(--primary); margin: 0 0 8px; font-size: 14px; }
+.changelog-entry ul { margin: 0; padding-left: 18px; }
+.changelog-entry li { margin-bottom: 6px; line-height: 1.5; color: var(--text-primary); font-size: 14px; }
+.changelog-entry li:last-child { margin-bottom: 0; }
+
 .action-sheet-overlay {
   position: fixed;
   inset: 0;
