@@ -530,6 +530,8 @@ function switchMode(mode) {
   }
 }
 
+document.getElementById('goto-trips-btn').addEventListener('click', () => switchTab('trips'));
+
 document.getElementById('goto-wealth-btn').addEventListener('click', () => switchMode('wealth'));
 document.getElementById('goto-ledger-btn').addEventListener('click', () => switchMode('ledger'));
 
