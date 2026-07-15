@@ -2054,7 +2054,7 @@ document.getElementById('btn-transfer').addEventListener('click', () => setTxTyp
 
 function populateFormSelectors() {
   const catSelect = document.getElementById('tx-category');
-  const relevant = allCategories.filter((c) => c.type === currentTxType);
+  const relevant = allCategories.filter((c) => c.user_id === currentUserId && c.type === currentTxType);
   catSelect.innerHTML = relevant.map((c) => `<option value="${c.id}">${c.name}</option>`).join('');
 
   const activeAccounts = allAccounts.filter((a) => !a.is_archived);
@@ -2072,7 +2072,8 @@ function populateFormSelectors() {
   const merchantInput = document.getElementById('tx-merchant-input');
   const merchantDatalist = document.getElementById('tx-merchant-datalist');
   const currentMerchantId = merchantHidden.value;
-  merchantDatalist.innerHTML = allMerchants.map((m) => `<option value="${m.name}">`).join('');
+  const ownMerchants = allMerchants.filter((m) => m.user_id === currentUserId);
+  merchantDatalist.innerHTML = ownMerchants.map((m) => `<option value="${m.name}">`).join('');
   const currentMerchant = allMerchants.find((m) => m.id === currentMerchantId);
   merchantInput.value = currentMerchant ? currentMerchant.name : '';
   merchantHidden.value = currentMerchant ? currentMerchant.id : '';
@@ -2080,7 +2081,7 @@ function populateFormSelectors() {
 
 document.getElementById('tx-merchant-input').addEventListener('input', () => {
   const typed = document.getElementById('tx-merchant-input').value.trim();
-  const match = allMerchants.find((m) => m.name === typed);
+  const match = allMerchants.find((m) => m.user_id === currentUserId && m.name === typed);
   document.getElementById('tx-merchant').value = match ? match.id : '';
 });
 
@@ -2522,7 +2523,7 @@ function renderCategoryScreen() {
   expenseList.innerHTML = '';
   incomeList.innerHTML = '';
 
-  allCategories.forEach((c) => {
+  allCategories.filter((c) => c.user_id === currentUserId).forEach((c) => {
     const row = document.createElement('div');
     row.className = 'cat-row';
     const name = document.createElement('span');
@@ -2543,7 +2544,7 @@ function renderCategoryScreen() {
 
   const merchantList = document.getElementById('merchant-list');
   merchantList.innerHTML = '';
-  allMerchants.forEach((m) => {
+  allMerchants.filter((m) => m.user_id === currentUserId).forEach((m) => {
     const row = document.createElement('div');
     row.className = 'cat-row';
     const name = document.createElement('span');
