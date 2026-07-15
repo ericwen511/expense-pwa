@@ -292,6 +292,9 @@ button { transition: background-color 0.15s ease, border-color 0.15s ease, color
 
 .bar-value { width: 108px; flex-shrink: 0; text-align: right; font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
 
+.list-year-filter-row { margin-bottom: 10px; }
+.list-year-filter-row .year-select { width: 100%; text-align: left; }
+
 .search-box { margin-bottom: 10px; }
 
 .advanced-filter-panel {

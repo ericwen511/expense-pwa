@@ -1509,6 +1509,7 @@ async function refreshAll() {
   }
 
   renderOverview();
+  populateListYearFilter();
   renderList();
   renderCategoryScreen();
   renderAccountsScreen();
@@ -1846,6 +1847,7 @@ document.getElementById('month-select').addEventListener('change', applyYearMont
 
 /* ---------- 交易列表畫面 ---------- */
 let listTypeFilter = 'expense';
+let listYearFilter = 'all';
 
 document.querySelectorAll('#list-type-toggle .type-btn').forEach((btn) => {
   btn.addEventListener('click', () => {
@@ -1857,11 +1859,25 @@ document.querySelectorAll('#list-type-toggle .type-btn').forEach((btn) => {
   });
 });
 
+function populateListYearFilter() {
+  const sel = document.getElementById('list-year-filter');
+  const years = [...new Set(allTransactions.map((t) => t.date.slice(0, 4)))].sort((a, b) => b.localeCompare(a));
+  sel.innerHTML = '<option value="all">全部年份</option>' + years.map((y) => `<option value="${y}">${y}年</option>`).join('');
+  sel.value = years.includes(listYearFilter) ? listYearFilter : 'all';
+  listYearFilter = sel.value;
+}
+
+document.getElementById('list-year-filter').addEventListener('change', () => {
+  listYearFilter = document.getElementById('list-year-filter').value;
+  renderList();
+});
+
 function renderList() {
   const keyword = (document.getElementById('search-input').value || '').trim().toLowerCase();
 
   let filtered = allTransactions.filter((t) => {
     if (t.type !== listTypeFilter) return false;
+    if (listYearFilter !== 'all' && t.date.slice(0, 4) !== listYearFilter) return false;
     if (filterState.merchantIds.length && !filterState.merchantIds.includes(t.merchantId)) return false;
     if (filterState.accountIds.length) {
       const matchesAccount = t.type === 'transfer'
