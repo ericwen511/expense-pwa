@@ -1603,7 +1603,7 @@ function renderOverview() {
 
   document.getElementById('overview-list-title').textContent = overviewViewMode === 'year' ? '當年交易' : '當月交易';
 
-  const filteredList = periodTx.filter((t) => t.type === overviewTypeFilter);
+  const filteredList = periodTx.filter((t) => t.type === overviewTypeFilter).slice().reverse();
   const list = document.getElementById('overview-list');
   list.innerHTML = '';
   document.getElementById('overview-empty').style.display = filteredList.length ? 'none' : 'block';
