@@ -1861,7 +1861,11 @@ document.querySelectorAll('#list-type-toggle .type-btn').forEach((btn) => {
 
 function populateListYearFilter() {
   const sel = document.getElementById('list-year-filter');
-  const years = [...new Set(allTransactions.map((t) => t.date.slice(0, 4)))].sort((a, b) => b.localeCompare(a));
+  const dataYears = allTransactions.map((t) => Number(t.date.slice(0, 4)));
+  const minYear = Math.min(2010, ...dataYears);
+  const maxYear = Math.max(new Date().getFullYear() + 15, ...dataYears);
+  const years = [];
+  for (let y = maxYear; y >= minYear; y--) years.push(String(y));
   sel.innerHTML = '<option value="all">全部年份</option>' + years.map((y) => `<option value="${y}">${y}年</option>`).join('');
   sel.value = years.includes(listYearFilter) ? listYearFilter : 'all';
   listYearFilter = sel.value;
