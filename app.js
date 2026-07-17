@@ -2999,6 +2999,8 @@ function showAuthScreen() {
   document.getElementById('bottom-nav').style.display = 'none';
   document.getElementById('logout-btn').style.display = 'none';
   document.getElementById('ledger-bar').style.display = 'none';
+  authMode = 'login';
+  renderAuthMode();
 }
 
 function showAppShell() {
@@ -3029,20 +3031,34 @@ function clearAuthError() {
   document.getElementById('auth-error').style.display = 'none';
 }
 
-document.getElementById('auth-login-btn').addEventListener('click', async () => {
+let authMode = 'login';
+
+function renderAuthMode() {
+  const isSignup = authMode === 'signup';
+  document.getElementById('auth-title').textContent = isSignup ? '建立新帳號' : '登入';
+  document.getElementById('auth-submit-btn').textContent = isSignup ? '建立新帳號' : '登入';
+  document.getElementById('auth-toggle-mode-btn').textContent = isSignup ? '已經有帳號？登入' : '還沒有帳號？建立新帳號';
+  document.getElementById('auth-forgot-btn').style.display = isSignup ? 'none' : 'block';
   clearAuthError();
-  const email = document.getElementById('auth-email').value.trim();
-  const password = document.getElementById('auth-password').value;
-  if (!email || !password) { showAuthError('請輸入Email和密碼'); return; }
-  const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
-  if (error) showAuthError(error.message);
+}
+
+document.getElementById('auth-toggle-mode-btn').addEventListener('click', () => {
+  authMode = authMode === 'login' ? 'signup' : 'login';
+  renderAuthMode();
 });
 
-document.getElementById('auth-signup-btn').addEventListener('click', async () => {
+document.getElementById('auth-submit-btn').addEventListener('click', async () => {
   clearAuthError();
   const email = document.getElementById('auth-email').value.trim();
   const password = document.getElementById('auth-password').value;
   if (!email || !password) { showAuthError('請輸入Email和密碼'); return; }
+
+  if (authMode === 'login') {
+    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    if (error) showAuthError(error.message);
+    return;
+  }
+
   if (password.length < 6) { showAuthError('密碼至少需要6碼'); return; }
   const { data, error } = await supabaseClient.auth.signUp({
     email,
