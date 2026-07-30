@@ -1468,23 +1468,29 @@ document.getElementById('tx-form').addEventListener('click', (e) => {
 
 /* ---------- 讀取所有資料並重繪畫面 ---------- */
 async function refreshAll() {
-  await flushPendingQueue();
+  // 第一批查詢彼此沒有依賴關係，同時發送，不要排隊等——這幾個查詢加起來
+  // 排隊抓的話一來一回的延遲會疊加好幾倍，是登入後金額要等好幾秒才出現的主因
+  const [, categories, accounts, merchants, budgetsResult, recurringRulesResult] = await Promise.all([
+    flushPendingQueue(),
+    sbGetAll('categories'),
+    sbGetAllInLedger('accounts'),
+    sbGetAll('merchants'),
+    sbGetAllInLedger('budgets').catch(() => []),
+    sbGetAllInLedger('recurring_rules').catch(() => [])
+  ]);
+  allCategories = categories;
+  allAccounts = accounts;
+  allMerchants = merchants;
+  allBudgets = budgetsResult;
+  allRecurringRules = recurringRulesResult;
 
-  allCategories = await sbGetAll('categories');
-  allAccounts = await sbGetAllInLedger('accounts');
-  allMerchants = await sbGetAll('merchants');
-  try {
-    allBudgets = await sbGetAllInLedger('budgets');
-  } catch (err) {
-    allBudgets = [];
-  }
-  try {
-    allRecurringRules = await sbGetAllInLedger('recurring_rules');
-  } catch (err) {
-    allRecurringRules = [];
-  }
-
-  const pending = (await idbGetAll('pending_transactions'))
+  // 這兩個查詢要等上面的 flushPendingQueue() 先完成(已同步的項目才會從待同步佇列移除)，
+  // 但彼此之間互相沒有依賴，一樣同時發送
+  const [pendingRaw, synced] = await Promise.all([
+    idbGetAll('pending_transactions'),
+    sbGetAllTransactions()
+  ]);
+  const pending = pendingRaw
     .filter((p) => p.ledgerId === currentLedgerId)
     .map((p) => ({
       ...p,
@@ -1492,7 +1498,6 @@ async function refreshAll() {
       pending: true
     }));
 
-  const synced = await sbGetAllTransactions();
   allTransactions = synced.concat(pending);
   allTransactions.sort((a, b) => (a.date + a.createdAt).localeCompare(b.date + b.createdAt));
 
