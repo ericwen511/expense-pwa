@@ -607,6 +607,7 @@ body.ledger-readonly .edit-control { display: none !important; }
 .calc-btn.calc-op { background: var(--primary-light); color: var(--primary); border-color: var(--primary-light); }
 .calc-btn.calc-ac { background: var(--expense-bg); color: var(--expense); border-color: var(--expense-bg); }
 .calc-btn.calc-del { background: var(--bg); color: var(--text-secondary); }
+.calc-btn.calc-eq { background: var(--primary); color: var(--card); border-color: var(--primary); }
 .calc-btn.calc-zero { flex: 2; }
 
 .ghost-btn-full {

@@ -1428,15 +1428,24 @@ function evalExpr(expr) {
   return result;
 }
 
+function formatCalcExpr(expr) {
+  return expr.replace(/\*/g, '×').replace(/\//g, '÷').replace(/-/g, '－').replace(/\+/g, '＋');
+}
+
+/* 按=之前，大字直接顯示完整算式(例如550＋320)；按=之後才換成算出來的結果。
+   不管有沒有按=，隱藏欄位(#tx-amount，實際送出用)一律即時保持算式目前的計算結果，
+   這樣使用者就算沒按=直接按儲存，金額還是對的。 */
+let calcJustEvaluated = false;
+
 function updateCalcDisplay() {
-  const result = evalExpr(calcExpr);
-  document.getElementById('tx-amount-display').textContent = String(result);
-  document.getElementById('tx-amount').value = result;
+  document.getElementById('tx-amount-display').textContent = formatCalcExpr(calcExpr);
+  document.getElementById('tx-amount').value = evalExpr(calcExpr);
   updateExchangePreview();
 }
 
 function resetCalc() {
   calcExpr = '0';
+  calcJustEvaluated = false;
   updateCalcDisplay();
 }
 
@@ -1447,18 +1456,35 @@ document.getElementById('tx-form').addEventListener('click', (e) => {
 
   if (key === 'AC') {
     calcExpr = '0';
+    calcJustEvaluated = false;
   } else if (key === 'DEL') {
     calcExpr = calcExpr.length > 1 ? calcExpr.slice(0, -1) : '0';
+    calcJustEvaluated = false;
+  } else if (key === '=') {
+    calcExpr = String(Math.round(evalExpr(calcExpr) * 100) / 100);
+    calcJustEvaluated = true;
   } else if (key === '.') {
-    const lastNum = calcExpr.split(/[+\-*/]/).pop();
-    if (!lastNum.includes('.')) calcExpr += '.';
+    if (calcJustEvaluated) {
+      calcExpr = '0.';
+      calcJustEvaluated = false;
+    } else {
+      const lastNum = calcExpr.split(/[+\-*/]/).pop();
+      if (!lastNum.includes('.')) calcExpr += '.';
+    }
   } else if (['+', '-', '*', '/'].includes(key)) {
-    if (calcExpr === '0') return;
-    if (/[+\-*/]$/.test(calcExpr)) {
+    if (calcJustEvaluated) {
+      calcExpr += key;
+      calcJustEvaluated = false;
+    } else if (calcExpr === '0') {
+      return;
+    } else if (/[+\-*/]$/.test(calcExpr)) {
       calcExpr = calcExpr.slice(0, -1) + key;
     } else {
       calcExpr += key;
     }
+  } else if (calcJustEvaluated) {
+    calcExpr = key;
+    calcJustEvaluated = false;
   } else {
     calcExpr = calcExpr === '0' ? key : calcExpr + key;
   }
@@ -2269,6 +2295,7 @@ function startEditTransaction(t) {
   switchTab('add');
   setTxType(t.type);
   calcExpr = String(t.amount);
+  calcJustEvaluated = false;
   updateCalcDisplay();
   document.getElementById('tx-date').value = t.date;
   document.getElementById('tx-note').value = t.note || '';
