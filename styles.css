@@ -25,7 +25,7 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Microsoft JhengHei", sans-serif;
   background: var(--bg);
   color: var(--text-primary);
-  padding-bottom: 76px;
+  padding-bottom: calc(76px + env(safe-area-inset-bottom));
   -webkit-font-smoothing: antialiased;
 }
 
@@ -439,6 +439,32 @@ label {
 
 .primary-btn.small { width: auto; padding: 10px 16px; margin-top: 0; }
 
+.tx-save-row { display: flex; gap: 8px; }
+.tx-save-row .primary-btn, .tx-save-row .ghost-btn-full { width: auto; flex: 1; margin-top: 6px; }
+
+.save-toast {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-12px);
+  background: var(--primary);
+  color: #14161C;
+  font-weight: 600;
+  padding: 10px 20px;
+  border-radius: 999px;
+  box-shadow: 0 4px 16px rgba(201, 162, 93, 0.35);
+  z-index: 999;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  white-space: nowrap;
+}
+
+.save-toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 .cat-list { display: flex; flex-direction: column; margin-bottom: 12px; }
 
 .cat-row {
@@ -826,7 +852,7 @@ body.ledger-readonly .edit-control { display: none !important; }
   color: var(--w-text);
   font-family: 'Inter', sans-serif;
   min-height: 100vh;
-  padding-bottom: 76px;
+  padding-bottom: calc(76px + env(safe-area-inset-bottom));
 }
 
 .w-header {

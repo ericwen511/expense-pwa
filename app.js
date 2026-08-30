@@ -503,6 +503,7 @@ function switchTab(tab) {
   document.querySelectorAll('.nav-btn').forEach((b) => {
     b.classList.toggle('active', b.dataset.tab === tab);
   });
+  window.scrollTo(0, 0);
   if (tab === 'add') {
     document.getElementById('tx-date').value = new Date().toISOString().slice(0, 10);
   }
@@ -2144,6 +2145,15 @@ document.getElementById('btn-quick-add-merchant').addEventListener('click', () =
   switchTab('categories');
 });
 
+let saveToastTimer = null;
+function showSaveToast(message) {
+  const el = document.getElementById('save-toast');
+  el.textContent = message;
+  el.classList.add('show');
+  clearTimeout(saveToastTimer);
+  saveToastTimer = setTimeout(() => el.classList.remove('show'), 1800);
+}
+
 document.getElementById('tx-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const amount = parseFloat(document.getElementById('tx-amount').value);
@@ -2261,9 +2271,11 @@ document.getElementById('tx-form').addEventListener('submit', async (e) => {
     }
   }
 
+  const saveAgain = e.submitter && e.submitter.id === 'tx-form-save-again';
   cancelEditTransaction();
   await refreshAll();
-  switchTab('overview');
+  switchTab(saveAgain ? 'add' : 'overview');
+  if (saveAgain) showSaveToast('已儲存，可以繼續記下一筆');
 });
 
 document.getElementById('tx-recurring-checkbox').addEventListener('change', (e) => {
@@ -2320,6 +2332,7 @@ function startEditTransaction(t) {
     document.getElementById('tx-merchant').value = t.merchantId || '';
   }
   document.getElementById('tx-form-submit').textContent = '更新交易';
+  document.getElementById('tx-form-save-again').style.display = 'none';
   document.getElementById('tx-form-cancel').style.display = 'block';
   document.getElementById('tx-form-delete').style.display = 'block';
   document.getElementById('tx-recurring-label').style.display = 'none';
@@ -2342,6 +2355,7 @@ function cancelEditTransaction() {
   resetCalc();
   setTxType('expense');
   document.getElementById('tx-form-submit').textContent = '儲存';
+  document.getElementById('tx-form-save-again').style.display = 'block';
   document.getElementById('tx-form-cancel').style.display = 'none';
   document.getElementById('tx-form-delete').style.display = 'none';
   document.getElementById('tx-recurring-label').style.display = 'flex';
