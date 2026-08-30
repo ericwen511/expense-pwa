@@ -2352,6 +2352,11 @@ function cancelEditTransaction() {
   editingRecurringRuleId = null;
   document.getElementById('tx-form').reset();
   document.getElementById('tx-date').value = new Date().toISOString().slice(0, 10);
+  /* #tx-merchant是hidden欄位，瀏覽器對hidden input的value setter規範是直接寫回value屬性本身，
+     等於每次程式設定.value時都在同步覆蓋form.reset()的還原目標，導致reset()永遠「還原」成
+     使用者剛選的那個商家、實質上清不掉，這裡要額外手動清空才會真的清除 */
+  document.getElementById('tx-merchant-input').value = '';
+  document.getElementById('tx-merchant').value = '';
   resetCalc();
   setTxType('expense');
   document.getElementById('tx-form-submit').textContent = '儲存';
