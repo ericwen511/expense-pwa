@@ -3026,6 +3026,71 @@ document.getElementById('einvoice-csv-input').addEventListener('change', async (
   statusEl.textContent = `匯入完成，共${files.length}個檔案、${totalInvoices}張發票，成功${totalDone}張${fileErrors ? `、${fileErrors}個檔案讀取失敗` : ''}`;
 });
 
+// 消費分類：依商家名稱/品項關鍵字做規則歸類，僅供瀏覽參考，
+// 準確度取決於關鍵字表涵蓋範圍，沒對到的一律歸「其他」，不影響記帳分類
+const EINVOICE_CATEGORY_RULES = [
+  { name: '超商', sellerKeywords: ['統一超商', '7-ELEVEN', '7-11', '全家便利商店', '萊爾富', 'OK超商', '來來超商'] },
+  { name: '超市量販', sellerKeywords: ['全聯', '家樂福', '大潤發', '愛買', '美廉社', '好市多', 'COSTCO', '棉花田', '楓康'] },
+  { name: '咖啡飲料', sellerKeywords: ['路易莎', '星巴克', '丹提', 'CAMA', '可不可', '五十嵐', '清心', 'COMEBUY', '鮮茶道', '迷客夏', '大苑子', '甘霖商行', '甘露'], itemKeywords: ['咖啡', '拿鐵', '美式', '紅茶', '綠茶', '烏龍', '奶茶', '鮮奶茶', '果茶'] },
+  { name: '餐飲', sellerKeywords: ['餐飲', '小料理屋', '餐廳', '小吃', '火鍋', '牛肉麵', '拉麵', '早餐店', '自助餐', '麵店'], itemKeywords: ['麵', '飯', '披薩', '漢堡', '便當', '套餐', '火鍋', '燒肉', '壽司', '沙拉'] },
+  { name: '百貨購物', sellerKeywords: ['誠品生活', '太平洋崇光', 'SOGO', '新光三越', '遠東百貨', '微風', '大江', '環球', '宏匯', '京站', '統一時代'] },
+  { name: '網路購物', sellerKeywords: ['富邦媒體', 'MOMO', '酷澎', 'COUPANG', '蝦皮', 'PCHOME', 'FRIDAY', '東森購物'] },
+  { name: '水電瓦斯', sellerKeywords: ['自來水', '台灣電力', '台電', '瓦斯'] },
+  { name: '電信網路', sellerKeywords: ['中華電信', '台灣大哥大', '遠傳', '台灣之星', '亞太電信', '凱擘', '有線電視'] },
+  { name: '藥妝美妝', sellerKeywords: ['屈臣氏', '康是美', '寶雅', '萬寧'] },
+  { name: '交通停車', sellerKeywords: ['加油', '中油', '台亞', '國道', '停車', '悠遊卡', '高鐵', '台鐵', '計程車', 'UBER'] },
+  { name: '醫療保健', sellerKeywords: ['藥局', '診所', '醫院'] },
+  { name: '文具生活雜貨', sellerKeywords: ['文具', '生活工場', '無印良品', 'IKEA'] }
+];
+
+function classifyEinvoice(inv) {
+  const seller = (inv.seller_name || '').toUpperCase();
+  for (const rule of EINVOICE_CATEGORY_RULES) {
+    if (rule.sellerKeywords.some((k) => seller.includes(k.toUpperCase()))) return rule.name;
+  }
+  const itemsText = (Array.isArray(inv.items) ? inv.items : []).map((it) => it.description || '').join(' ').toUpperCase();
+  for (const rule of EINVOICE_CATEGORY_RULES) {
+    if (rule.itemKeywords && rule.itemKeywords.some((k) => itemsText.includes(k.toUpperCase()))) return rule.name;
+  }
+  return '其他';
+}
+
+function renderEinvoiceCategoryBreakdown(filtered) {
+  const container = document.getElementById('einvoice-category-breakdown');
+  if (!container) return;
+  container.innerHTML = '';
+  if (!filtered.length) return;
+
+  const totals = new Map();
+  filtered.forEach((inv) => {
+    const cat = classifyEinvoice(inv);
+    totals.set(cat, (totals.get(cat) || 0) + (Number(inv.amount) || 0));
+  });
+  const grandTotal = [...totals.values()].reduce((a, b) => a + b, 0) || 1;
+  const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]);
+
+  sorted.forEach(([cat, amount]) => {
+    const row = document.createElement('div');
+    row.className = 'account-row';
+    const info = document.createElement('div');
+    info.className = 'account-info';
+    const name = document.createElement('p');
+    name.className = 'account-name';
+    name.textContent = cat;
+    const meta = document.createElement('p');
+    meta.className = 'account-meta';
+    meta.textContent = `${((amount / grandTotal) * 100).toFixed(1)}%`;
+    info.appendChild(name);
+    info.appendChild(meta);
+    const amountEl = document.createElement('p');
+    amountEl.className = 'account-balance';
+    amountEl.textContent = fmtMoney(amount);
+    row.appendChild(info);
+    row.appendChild(amountEl);
+    container.appendChild(row);
+  });
+}
+
 function renderEinvoiceList() {
   const container = document.getElementById('einvoice-list');
   if (!container) return;
@@ -3039,6 +3104,7 @@ function renderEinvoiceList() {
     totalLabelEl.textContent = einvoiceMonthFilter === 'all' ? '全部發票合計' : `${einvoiceMonthFilter.replace('-', '年')}月合計`;
     totalAmountEl.textContent = fmtMoney(total);
   }
+  renderEinvoiceCategoryBreakdown(filtered);
 
   if (!allEinvoices.length) {
     const hint = document.createElement('p');
