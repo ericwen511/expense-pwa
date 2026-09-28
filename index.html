@@ -335,6 +335,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
       <span>行程管理</span>
     </button>
+    <button type="button" id="goto-einvoice-btn" class="ghost-btn-full" style="margin-bottom:12px; display:flex; align-items:center; justify-content:center; gap:8px;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+      <span>統一發票</span>
+    </button>
     <button type="button" id="goto-about-btn" class="ghost-btn-full" style="margin-bottom:20px; display:flex; align-items:center; justify-content:center; gap:8px;">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
       <span>軟體資訊</span>
@@ -370,7 +374,7 @@
     <p class="hint-text">每月固定發生的收支(例如房租、薪水)，未來月份會自動產生交易，日期還沒到之前用淺灰色顯示</p>
     <div id="recurring-list" class="account-list"></div>
 
-    <p class="section-title" style="margin-top:20px;">電子發票（財政部載具）</p>
+    <p class="section-title" style="margin-top:20px;" id="einvoice-section">電子發票（財政部載具）</p>
     <p class="hint-text">匯入財政部電子發票整合服務平台匯出的CSV檔案，顯示品項明細（商品名稱/數量/單價），純顯示用途，不會自動記到記帳分類。到 <a href="https://www.einvoice.nat.gov.tw" target="_blank" rel="noopener">einvoice.nat.gov.tw</a> 用手機條碼登入 →「發票查詢及捐贈」→ 選日期區間查詢 → 按「匯出」下載CSV，再到這裡匯入（財政部一次只能匯出一個月，可以一次選多個檔案一起匯入，重複的發票會自動更新不會重複）。</p>
     <input type="file" id="einvoice-csv-input" accept=".csv" multiple style="display:none;" />
     <button type="button" id="einvoice-import-btn" class="primary-btn small">選擇CSV檔案匯入</button>
