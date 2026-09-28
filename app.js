@@ -3055,8 +3055,10 @@ function classifyEinvoice(inv) {
   return '其他';
 }
 
+let einvoiceChartType = 'pie';
+
 function renderEinvoiceCategoryBreakdown(filtered) {
-  const container = document.getElementById('einvoice-category-breakdown');
+  const container = document.getElementById('einvoice-category-chart');
   if (!container) return;
   container.innerHTML = '';
   if (!filtered.length) return;
@@ -3066,30 +3068,24 @@ function renderEinvoiceCategoryBreakdown(filtered) {
     const cat = classifyEinvoice(inv);
     totals.set(cat, (totals.get(cat) || 0) + (Number(inv.amount) || 0));
   });
-  const grandTotal = [...totals.values()].reduce((a, b) => a + b, 0) || 1;
-  const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]);
+  const entries = [...totals.entries()].map(([name, amount]) => ({ name, amount })).sort((a, b) => b.amount - a.amount);
+  const total = entries.reduce((s, e) => s + e.amount, 0);
 
-  sorted.forEach(([cat, amount]) => {
-    const row = document.createElement('div');
-    row.className = 'account-row';
-    const info = document.createElement('div');
-    info.className = 'account-info';
-    const name = document.createElement('p');
-    name.className = 'account-name';
-    name.textContent = cat;
-    const meta = document.createElement('p');
-    meta.className = 'account-meta';
-    meta.textContent = `${((amount / grandTotal) * 100).toFixed(1)}%`;
-    info.appendChild(name);
-    info.appendChild(meta);
-    const amountEl = document.createElement('p');
-    amountEl.className = 'account-balance';
-    amountEl.textContent = fmtMoney(amount);
-    row.appendChild(info);
-    row.appendChild(amountEl);
-    container.appendChild(row);
-  });
+  container.appendChild(einvoiceChartType === 'pie' ? buildPieChart(entries, total) : buildBarChart(entries, total));
 }
+
+document.getElementById('einvoice-chart-pie-btn').addEventListener('click', () => {
+  einvoiceChartType = 'pie';
+  document.getElementById('einvoice-chart-pie-btn').classList.add('active');
+  document.getElementById('einvoice-chart-bar-btn').classList.remove('active');
+  renderEinvoiceList();
+});
+document.getElementById('einvoice-chart-bar-btn').addEventListener('click', () => {
+  einvoiceChartType = 'bar';
+  document.getElementById('einvoice-chart-bar-btn').classList.add('active');
+  document.getElementById('einvoice-chart-pie-btn').classList.remove('active');
+  renderEinvoiceList();
+});
 
 function renderEinvoiceList() {
   const container = document.getElementById('einvoice-list');
