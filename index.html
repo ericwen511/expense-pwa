@@ -370,6 +370,29 @@
     <p class="hint-text">每月固定發生的收支(例如房租、薪水)，未來月份會自動產生交易，日期還沒到之前用淺灰色顯示</p>
     <div id="recurring-list" class="account-list"></div>
 
+    <p class="section-title" style="margin-top:20px;">電子發票（財政部載具）</p>
+    <p class="hint-text">同步手機條碼載具的發票品項明細（商品名稱/數量/單價），純顯示用途，不會自動記到記帳分類。需先在 <a href="https://www.einvoice.nat.gov.tw" target="_blank" rel="noopener">einvoice.nat.gov.tw</a> 用這個載具登入設定過「驗證碼」。</p>
+    <div id="einvoice-carrier-form">
+      <label>載具號碼</label>
+      <input type="text" id="einvoice-card-no" placeholder="例如 /J1E5QO2" />
+      <label>驗證碼</label>
+      <input type="password" id="einvoice-card-encrypt" placeholder="於官網「載具設定」設定的驗證碼" autocomplete="off" />
+      <button type="button" id="einvoice-save-carrier-btn" class="primary-btn small">儲存載具設定</button>
+      <p class="hint-text" id="einvoice-carrier-status"></p>
+    </div>
+
+    <div id="einvoice-sync-panel" style="margin-top:14px; display:none;">
+      <label>同步區間</label>
+      <div class="amount-range-row">
+        <input type="date" id="einvoice-sync-from" />
+        <span>～</span>
+        <input type="date" id="einvoice-sync-to" />
+      </div>
+      <button type="button" id="einvoice-sync-btn" class="primary-btn small">開始同步</button>
+      <p class="hint-text" id="einvoice-sync-status"></p>
+      <div id="einvoice-list" class="account-list" style="margin-top:10px;"></div>
+    </div>
+
     <p class="section-title" style="margin-top:20px;">資料備份</p>
     <button type="button" id="export-json-btn" class="ghost-btn-full">匯出JSON備份（完整資料）</button>
     <button type="button" id="export-csv-btn" class="ghost-btn-full">匯出CSV（交易明細）</button>

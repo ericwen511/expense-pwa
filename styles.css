@@ -597,6 +597,14 @@ label {
 
 body.ledger-readonly .edit-control { display: none !important; }
 
+.einvoice-row { cursor: pointer; }
+.einvoice-items { display: none; flex-direction: column; margin: 0 0 8px; padding: 8px 10px; background: var(--bg); border-radius: 8px; }
+.einvoice-items.show { display: flex; }
+.einvoice-item-row { display: flex; align-items: center; justify-content: space-between; padding: 4px 0; font-size: 13px; color: var(--text-secondary); gap: 10px; }
+.einvoice-item-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.einvoice-item-amount { flex-shrink: 0; white-space: nowrap; }
+.einvoice-empty-items { font-size: 13px; color: var(--text-muted); padding: 4px 0; }
+
 .amount-display {
   background: var(--card);
   border: 1px solid var(--border);
