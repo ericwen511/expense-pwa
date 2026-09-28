@@ -2878,27 +2878,15 @@ document.getElementById('import-json-input').addEventListener('change', async (e
 });
 
 /* ---------- 電子發票（財政部載具） ----------
-   純顯示用途：同步發票清單+品項明細(商品名稱/數量/單價)，
-   不做商店/品項對應記帳分類，也不會自動記一筆到記帳系統。
-   驗證碼(card_encrypt)是使用者自己在 einvoice.nat.gov.tw 設定的，
-   跟載具號碼(card_no)是兩回事，明細查詢一定要帶驗證碼才查得到。 */
-let einvoiceCarrier = null;
+   純顯示用途：匯入從 einvoice.nat.gov.tw「發票查詢及捐贈」頁面手動匯出的CSV，
+   顯示發票清單+品項明細(商品名稱/數量/單價)，不做商店/品項對應記帳分類，
+   也不會自動記一筆到記帳系統。
+   原本設計是直接呼叫財政部「電子發票API」自動同步，但實測發現這支API只開放
+   給企業/加值中心身分申請appID，個人消費者帳號申請會被拒絕(403 Forbidden)，
+   所以改成手動匯出CSV再匯入，CSV裡本來就含完整品項明細，不需要appID。 */
 let allEinvoices = [];
 
-async function loadEinvoiceCarrier() {
-  try {
-    const rows = await sbGetAll('einvoice_carriers');
-    einvoiceCarrier = rows[0] || null;
-  } catch (err) {
-    einvoiceCarrier = null;
-  }
-  if (einvoiceCarrier) {
-    document.getElementById('einvoice-card-no').value = einvoiceCarrier.card_no;
-    document.getElementById('einvoice-card-encrypt').value = einvoiceCarrier.card_encrypt;
-    document.getElementById('einvoice-sync-panel').style.display = 'block';
-  } else {
-    document.getElementById('einvoice-sync-panel').style.display = 'none';
-  }
+async function loadEinvoiceList() {
   try {
     allEinvoices = await sbGetAll('einvoices');
     allEinvoices.sort((a, b) => b.inv_date.localeCompare(a.inv_date));
@@ -2908,152 +2896,109 @@ async function loadEinvoiceCarrier() {
   renderEinvoiceList();
 }
 
-document.getElementById('einvoice-save-carrier-btn').addEventListener('click', async () => {
-  const cardNo = document.getElementById('einvoice-card-no').value.trim();
-  const cardEncrypt = document.getElementById('einvoice-card-encrypt').value.trim();
-  const statusEl = document.getElementById('einvoice-carrier-status');
-  if (!cardNo || !cardEncrypt) {
-    statusEl.textContent = '請輸入載具號碼跟驗證碼';
-    return;
-  }
-  try {
-    if (einvoiceCarrier) {
-      await sbUpdate('einvoice_carriers', einvoiceCarrier.id, { card_no: cardNo, card_encrypt: cardEncrypt, updated_at: new Date().toISOString() });
-    } else {
-      await sbInsert('einvoice_carriers', { card_no: cardNo, card_encrypt: cardEncrypt });
+function einvoiceCsvDateToInput(d) {
+  // 財政部CSV匯出的日期格式是'yyyyMMdd'(例如20260927)，轉成'yyyy-MM-dd'
+  const s = (d || '').trim();
+  if (!/^\d{8}$/.test(s)) return s;
+  return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+}
+
+function parseEinvoiceCsvLine(line) {
+  // 財政部匯出的CSV品名欄位偶爾含未跳脫的逗號(例如"三選二-沙拉,湯")，
+  // 但品名固定是最後一欄，所以把固定13欄之後的部分整段接回去當品名即可，
+  // 不需要處理完整的CSV引號跳脫規則
+  const cols = line.split(',');
+  if (cols.length < 14) return null;
+  const [, invDate, invNum, , invStatus, , sellerBan, sellerName, , , quantity, unitPrice, itemAmount] = cols;
+  const description = cols.slice(13).join(',').trim();
+  return {
+    invDate: einvoiceCsvDateToInput(invDate),
+    invNum: (invNum || '').trim(),
+    invStatus: (invStatus || '').trim(),
+    sellerBan: (sellerBan || '').trim(),
+    sellerName: (sellerName || '').trim(),
+    quantity: (quantity || '').trim(),
+    unitPrice: (unitPrice || '').trim(),
+    amount: Number(itemAmount) || 0,
+    description
+  };
+}
+
+function parseEinvoiceCsv(text) {
+  const lines = text.split(/\r\n|\n/).map((l) => l.trim()).filter(Boolean);
+  const invoiceMap = new Map();
+  for (let i = 1; i < lines.length; i++) {
+    const row = parseEinvoiceCsvLine(lines[i]);
+    if (!row || !row.invNum || !row.invDate) continue; // 跳過表尾說明文字等非資料列
+    const key = row.invNum + '_' + row.invDate;
+    if (!invoiceMap.has(key)) {
+      invoiceMap.set(key, {
+        inv_num: row.invNum,
+        inv_date: row.invDate,
+        seller_name: row.sellerName || null,
+        seller_ban: row.sellerBan || null,
+        inv_status: row.invStatus || null,
+        amount: 0,
+        items: []
+      });
     }
-    statusEl.textContent = '已儲存';
-    await loadEinvoiceCarrier();
-  } catch (err) {
-    statusEl.textContent = '儲存失敗：' + err.message;
+    const inv = invoiceMap.get(key);
+    inv.amount += row.amount;
+    inv.items.push({ description: row.description, quantity: row.quantity, unitPrice: row.unitPrice, amount: row.amount });
   }
+  return [...invoiceMap.values()];
+}
+
+function decodeEinvoiceCsvBuffer(buffer) {
+  // 財政部匯出的CSV編碼不保證一定是UTF-8，先用UTF-8解碼，
+  // 如果出現替代字元(亂碼)就改用Big5重新解碼
+  const utf8Text = new TextDecoder('utf-8', { fatal: false }).decode(buffer);
+  if (!utf8Text.includes('�')) return utf8Text;
+  try {
+    return new TextDecoder('big5', { fatal: false }).decode(buffer);
+  } catch (err) {
+    return utf8Text;
+  }
+}
+
+document.getElementById('einvoice-import-btn').addEventListener('click', () => {
+  document.getElementById('einvoice-csv-input').click();
 });
 
-function einvoiceDateToInput(d) {
-  // 財政部回傳格式為 'yyyy/MM/dd'，畫面/資料庫要用 'yyyy-MM-dd'
-  return (d || '').replaceAll('/', '-');
-}
-
-function einvoiceApiErrorMsg(data) {
-  // 財政部API本身的錯誤格式是 {code, msg}（code不是'200'就代表失敗），
-  // 跟我們自己Edge Function在驗證參數失敗時回的 {error: '...'} 是兩種不同格式，
-  // 這裡統一判斷，避免把API的真實錯誤(例如appID未申請)誤判成「查無資料」
-  if (!data) return null;
-  if (data.error) return data.error;
-  if (data.code !== undefined && String(data.code) !== '200') return data.msg || `API錯誤(code=${data.code})`;
-  return null;
-}
-
-function normalizeHeaderInvDate(raw) {
-  // 財政部清單API(carrierInvChk)部分版本的invDate欄位，回傳的不是字串，
-  // 而是類似舊版JS Date物件序列化後的物件（year從1900起算、month從0起算），
-  // 跟明細API(carrierInvDetail)回傳的純字串格式不同，這裡做防禦性轉換避免壞掉
-  if (typeof raw === 'string') return raw;
-  if (raw && typeof raw === 'object') {
-    const y = (raw.year || 0) + 1900;
-    const m = (raw.month || 0) + 1;
-    const d = raw.date || 1;
-    return `${y}/${String(m).padStart(2, '0')}/${String(d).padStart(2, '0')}`;
-  }
-  return '';
-}
-
-async function syncEinvoiceDetail(cardNo, cardEncrypt, header) {
-  const headerInvDate = normalizeHeaderInvDate(header.invDate);
-  const { data, error } = await supabaseClient.functions.invoke('get-einvoice', {
-    body: {
-      action: 'detail',
-      cardNo,
-      cardEncrypt,
-      invNum: header.invNum,
-      invDate: headerInvDate,
-      sellerName: header.sellerName,
-      amount: header.amount
-    }
-  });
-  const apiErr = error ? (error.message || '明細查詢失敗') : einvoiceApiErrorMsg(data);
-  if (apiErr) throw new Error(apiErr);
-
-  const invDate = einvoiceDateToInput(data.invDate || headerInvDate);
-  const items = (data.details || []).map((it) => ({
-    description: it.description,
-    quantity: it.quantity,
-    unitPrice: it.unitPrice,
-    amount: it.amount
-  }));
-  const row = {
-    inv_num: header.invNum,
-    inv_date: invDate,
-    seller_name: data.sellerName || header.sellerName || null,
-    seller_ban: data.sellerBan || null,
-    amount: Number(data.amount || header.amount) || null,
-    inv_status: header.invStatus || null,
-    items,
-    synced_at: new Date().toISOString()
-  };
-
+document.getElementById('einvoice-csv-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  const statusEl = document.getElementById('einvoice-import-status');
+  statusEl.textContent = '匯入中...';
   try {
-    await sbInsert('einvoices', row);
-  } catch (err) {
-    if (err.code === '23505') {
-      const existing = allEinvoices.find((e) => e.inv_num === row.inv_num && e.inv_date === row.inv_date);
-      if (existing) await sbUpdate('einvoices', existing.id, row);
-    } else {
-      throw err;
-    }
-  }
-}
-
-document.getElementById('einvoice-sync-btn').addEventListener('click', async () => {
-  const statusEl = document.getElementById('einvoice-sync-status');
-  const cardNo = document.getElementById('einvoice-card-no').value.trim();
-  const cardEncrypt = document.getElementById('einvoice-card-encrypt').value.trim();
-  const startDate = document.getElementById('einvoice-sync-from').value;
-  const endDate = document.getElementById('einvoice-sync-to').value;
-  if (!startDate || !endDate) {
-    statusEl.textContent = '請選擇同步起訖日期';
-    return;
-  }
-
-  const btn = document.getElementById('einvoice-sync-btn');
-  btn.disabled = true;
-  statusEl.textContent = '查詢發票清單中...';
-
-  try {
-    const { data: listData, error: listError } = await supabaseClient.functions.invoke('get-einvoice', {
-      body: { action: 'list', cardNo, cardEncrypt, startDate, endDate }
-    });
-    const listApiErr = listError ? (listError.message || '清單查詢失敗') : einvoiceApiErrorMsg(listData);
-    if (listApiErr) throw new Error(listApiErr);
-
-    const headers = listData.details || [];
-    if (!headers.length) {
-      statusEl.textContent = '這段期間查無發票紀錄';
+    const buffer = await file.arrayBuffer();
+    const text = decodeEinvoiceCsvBuffer(buffer);
+    const invoices = parseEinvoiceCsv(text);
+    if (!invoices.length) {
+      statusEl.textContent = '這個檔案裡沒有解析到任何發票資料';
       return;
     }
-
     let done = 0;
-    let failed = 0;
-    for (const header of headers) {
-      statusEl.textContent = `同步明細中... (${done + failed + 1}/${headers.length}) ${header.sellerName || ''}`;
+    for (const inv of invoices) {
+      const row = { ...inv, synced_at: new Date().toISOString() };
       try {
-        await syncEinvoiceDetail(cardNo, cardEncrypt, header);
+        await sbInsert('einvoices', row);
         done += 1;
       } catch (err) {
-        failed += 1;
+        if (err.code === '23505') {
+          const existing = allEinvoices.find((e) => e.inv_num === row.inv_num && e.inv_date === row.inv_date);
+          if (existing) {
+            await sbUpdate('einvoices', existing.id, row);
+            done += 1;
+          }
+        }
       }
-      // 逐張查詢、稍微間隔一下，避免短時間內對財政部API發送過多請求
-      await new Promise((r) => setTimeout(r, 300));
     }
-
-    allEinvoices = await sbGetAll('einvoices');
-    allEinvoices.sort((a, b) => b.inv_date.localeCompare(a.inv_date));
-    renderEinvoiceList();
-    statusEl.textContent = `同步完成，共${headers.length}張發票，成功${done}張${failed ? `、失敗${failed}張` : ''}`;
+    await loadEinvoiceList();
+    statusEl.textContent = `匯入完成，共${invoices.length}張發票，成功${done}張`;
   } catch (err) {
-    statusEl.textContent = '同步失敗：' + err.message;
-  } finally {
-    btn.disabled = false;
+    statusEl.textContent = '匯入失敗：' + err.message;
   }
 });
 
@@ -4129,7 +4074,7 @@ async function initAppData() {
   renderLedgerSelect();
   await refreshAll();
   document.getElementById('tx-date').value = new Date().toISOString().slice(0, 10);
-  loadEinvoiceCarrier(); // 跟主要記帳資料無關，不用等它完成就能先讓畫面可操作
+  loadEinvoiceList(); // 跟主要記帳資料無關，不用等它完成就能先讓畫面可操作
 }
 
 supabaseClient.auth.onAuthStateChange((event, session) => {
