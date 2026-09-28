@@ -371,10 +371,11 @@
     <div id="recurring-list" class="account-list"></div>
 
     <p class="section-title" style="margin-top:20px;">電子發票（財政部載具）</p>
-    <p class="hint-text">匯入財政部電子發票整合服務平台匯出的CSV檔案，顯示品項明細（商品名稱/數量/單價），純顯示用途，不會自動記到記帳分類。到 <a href="https://www.einvoice.nat.gov.tw" target="_blank" rel="noopener">einvoice.nat.gov.tw</a> 用手機條碼登入 →「發票查詢及捐贈」→ 選日期區間查詢 → 按「匯出」下載CSV，再到這裡匯入。</p>
-    <input type="file" id="einvoice-csv-input" accept=".csv" style="display:none;" />
+    <p class="hint-text">匯入財政部電子發票整合服務平台匯出的CSV檔案，顯示品項明細（商品名稱/數量/單價），純顯示用途，不會自動記到記帳分類。到 <a href="https://www.einvoice.nat.gov.tw" target="_blank" rel="noopener">einvoice.nat.gov.tw</a> 用手機條碼登入 →「發票查詢及捐贈」→ 選日期區間查詢 → 按「匯出」下載CSV，再到這裡匯入（財政部一次只能匯出一個月，可以一次選多個檔案一起匯入，重複的發票會自動更新不會重複）。</p>
+    <input type="file" id="einvoice-csv-input" accept=".csv" multiple style="display:none;" />
     <button type="button" id="einvoice-import-btn" class="primary-btn small">選擇CSV檔案匯入</button>
     <p class="hint-text" id="einvoice-import-status"></p>
+    <select id="einvoice-month-filter" class="year-select" style="margin-top:10px;"></select>
     <div id="einvoice-list" class="account-list" style="margin-top:10px;"></div>
 
     <p class="section-title" style="margin-top:20px;">資料備份</p>

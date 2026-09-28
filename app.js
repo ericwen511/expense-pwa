@@ -2885,6 +2885,7 @@ document.getElementById('import-json-input').addEventListener('change', async (e
    給企業/加值中心身分申請appID，個人消費者帳號申請會被拒絕(403 Forbidden)，
    所以改成手動匯出CSV再匯入，CSV裡本來就含完整品項明細，不需要appID。 */
 let allEinvoices = [];
+let einvoiceMonthFilter = 'all';
 
 async function loadEinvoiceList() {
   try {
@@ -2893,8 +2894,22 @@ async function loadEinvoiceList() {
   } catch (err) {
     allEinvoices = [];
   }
+  populateEinvoiceMonthFilter();
   renderEinvoiceList();
 }
+
+function populateEinvoiceMonthFilter() {
+  const sel = document.getElementById('einvoice-month-filter');
+  const months = [...new Set(allEinvoices.map((e) => e.inv_date.slice(0, 7)))].sort().reverse();
+  sel.innerHTML = '<option value="all">全部月份</option>' + months.map((m) => `<option value="${m}">${m.replace('-', '年')}月</option>`).join('');
+  sel.value = months.includes(einvoiceMonthFilter) ? einvoiceMonthFilter : 'all';
+  einvoiceMonthFilter = sel.value;
+}
+
+document.getElementById('einvoice-month-filter').addEventListener('change', () => {
+  einvoiceMonthFilter = document.getElementById('einvoice-month-filter').value;
+  renderEinvoiceList();
+});
 
 function einvoiceCsvDateToInput(d) {
   // 財政部CSV匯出的日期格式是'yyyyMMdd'(例如20260927)，轉成'yyyy-MM-dd'
@@ -2966,40 +2981,46 @@ document.getElementById('einvoice-import-btn').addEventListener('click', () => {
 });
 
 document.getElementById('einvoice-csv-input').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
+  const files = [...e.target.files];
   e.target.value = '';
-  if (!file) return;
+  if (!files.length) return;
   const statusEl = document.getElementById('einvoice-import-status');
-  statusEl.textContent = '匯入中...';
-  try {
-    const buffer = await file.arrayBuffer();
-    const text = decodeEinvoiceCsvBuffer(buffer);
-    const invoices = parseEinvoiceCsv(text);
-    if (!invoices.length) {
-      statusEl.textContent = '這個檔案裡沒有解析到任何發票資料';
-      return;
-    }
-    let done = 0;
-    for (const inv of invoices) {
-      const row = { ...inv, synced_at: new Date().toISOString() };
-      try {
-        await sbInsert('einvoices', row);
-        done += 1;
-      } catch (err) {
-        if (err.code === '23505') {
-          const existing = allEinvoices.find((e) => e.inv_num === row.inv_num && e.inv_date === row.inv_date);
-          if (existing) {
-            await sbUpdate('einvoices', existing.id, row);
-            done += 1;
+  // 財政部一次只能匯出一個月，所以支援一次選多個檔案一起匯入；
+  // 同一批次內用allEinvoices暫存已處理過的紀錄，避免同一批裡有重複發票時互相找不到對方
+  let totalInvoices = 0;
+  let totalDone = 0;
+  let fileErrors = 0;
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    statusEl.textContent = `匯入中...(${i + 1}/${files.length}個檔案) ${file.name}`;
+    try {
+      const buffer = await file.arrayBuffer();
+      const text = decodeEinvoiceCsvBuffer(buffer);
+      const invoices = parseEinvoiceCsv(text);
+      totalInvoices += invoices.length;
+      for (const inv of invoices) {
+        const row = { ...inv, synced_at: new Date().toISOString() };
+        try {
+          const inserted = await sbInsert('einvoices', row);
+          allEinvoices.push(inserted);
+          totalDone += 1;
+        } catch (err) {
+          if (err.code === '23505') {
+            const existing = allEinvoices.find((e) => e.inv_num === row.inv_num && e.inv_date === row.inv_date);
+            if (existing) {
+              await sbUpdate('einvoices', existing.id, row);
+              Object.assign(existing, row);
+              totalDone += 1;
+            }
           }
         }
       }
+    } catch (err) {
+      fileErrors += 1;
     }
-    await loadEinvoiceList();
-    statusEl.textContent = `匯入完成，共${invoices.length}張發票，成功${done}張`;
-  } catch (err) {
-    statusEl.textContent = '匯入失敗：' + err.message;
   }
+  await loadEinvoiceList();
+  statusEl.textContent = `匯入完成，共${files.length}個檔案、${totalInvoices}張發票，成功${totalDone}張${fileErrors ? `、${fileErrors}個檔案讀取失敗` : ''}`;
 });
 
 function renderEinvoiceList() {
@@ -3009,12 +3030,21 @@ function renderEinvoiceList() {
   if (!allEinvoices.length) {
     const hint = document.createElement('p');
     hint.className = 'hint-text';
-    hint.textContent = '還沒有同步過發票紀錄';
+    hint.textContent = '還沒有匯入過發票紀錄';
     container.appendChild(hint);
     return;
   }
 
-  allEinvoices.forEach((inv) => {
+  const filtered = einvoiceMonthFilter === 'all' ? allEinvoices : allEinvoices.filter((e) => e.inv_date.slice(0, 7) === einvoiceMonthFilter);
+  if (!filtered.length) {
+    const hint = document.createElement('p');
+    hint.className = 'hint-text';
+    hint.textContent = '這個月份沒有發票紀錄';
+    container.appendChild(hint);
+    return;
+  }
+
+  filtered.forEach((inv) => {
     const row = document.createElement('div');
     row.className = 'account-row einvoice-row';
 
