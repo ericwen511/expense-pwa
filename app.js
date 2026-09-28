@@ -2934,6 +2934,16 @@ function einvoiceDateToInput(d) {
   return (d || '').replaceAll('/', '-');
 }
 
+function einvoiceApiErrorMsg(data) {
+  // 財政部API本身的錯誤格式是 {code, msg}（code不是'200'就代表失敗），
+  // 跟我們自己Edge Function在驗證參數失敗時回的 {error: '...'} 是兩種不同格式，
+  // 這裡統一判斷，避免把API的真實錯誤(例如appID未申請)誤判成「查無資料」
+  if (!data) return null;
+  if (data.error) return data.error;
+  if (data.code !== undefined && String(data.code) !== '200') return data.msg || `API錯誤(code=${data.code})`;
+  return null;
+}
+
 function normalizeHeaderInvDate(raw) {
   // 財政部清單API(carrierInvChk)部分版本的invDate欄位，回傳的不是字串，
   // 而是類似舊版JS Date物件序列化後的物件（year從1900起算、month從0起算），
@@ -2961,7 +2971,8 @@ async function syncEinvoiceDetail(cardNo, cardEncrypt, header) {
       amount: header.amount
     }
   });
-  if (error || (data && data.error)) throw new Error((data && (data.msg || data.error)) || (error && error.message) || '明細查詢失敗');
+  const apiErr = error ? (error.message || '明細查詢失敗') : einvoiceApiErrorMsg(data);
+  if (apiErr) throw new Error(apiErr);
 
   const invDate = einvoiceDateToInput(data.invDate || headerInvDate);
   const items = (data.details || []).map((it) => ({
@@ -3012,9 +3023,8 @@ document.getElementById('einvoice-sync-btn').addEventListener('click', async () 
     const { data: listData, error: listError } = await supabaseClient.functions.invoke('get-einvoice', {
       body: { action: 'list', cardNo, cardEncrypt, startDate, endDate }
     });
-    if (listError || (listData && listData.error)) {
-      throw new Error((listData && (listData.msg || listData.error)) || (listError && listError.message) || '清單查詢失敗');
-    }
+    const listApiErr = listError ? (listError.message || '清單查詢失敗') : einvoiceApiErrorMsg(listData);
+    if (listApiErr) throw new Error(listApiErr);
 
     const headers = listData.details || [];
     if (!headers.length) {
