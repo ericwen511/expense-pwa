@@ -3027,6 +3027,16 @@ function renderEinvoiceList() {
   const container = document.getElementById('einvoice-list');
   if (!container) return;
   container.innerHTML = '';
+
+  const filtered = einvoiceMonthFilter === 'all' ? allEinvoices : allEinvoices.filter((e) => e.inv_date.slice(0, 7) === einvoiceMonthFilter);
+  const total = filtered.reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0);
+  const totalLabelEl = document.getElementById('einvoice-total-label');
+  const totalAmountEl = document.getElementById('einvoice-total-amount');
+  if (totalLabelEl && totalAmountEl) {
+    totalLabelEl.textContent = einvoiceMonthFilter === 'all' ? '全部發票合計' : `${einvoiceMonthFilter.replace('-', '年')}月合計`;
+    totalAmountEl.textContent = fmtMoney(total);
+  }
+
   if (!allEinvoices.length) {
     const hint = document.createElement('p');
     hint.className = 'hint-text';
@@ -3035,7 +3045,6 @@ function renderEinvoiceList() {
     return;
   }
 
-  const filtered = einvoiceMonthFilter === 'all' ? allEinvoices : allEinvoices.filter((e) => e.inv_date.slice(0, 7) === einvoiceMonthFilter);
   if (!filtered.length) {
     const hint = document.createElement('p');
     hint.className = 'hint-text';
