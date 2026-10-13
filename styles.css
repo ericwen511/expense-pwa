@@ -1070,3 +1070,8 @@ body.ledger-readonly .edit-control { display: none !important; }
   .w-empty-hint { font-size: 16px; }
   .w-nav-btn { font-size: 15px; padding: 14px 16px; }
 }
+
+.note-suggestions { margin-top: 6px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); overflow: hidden; }
+.note-suggestion-item { padding: 10px 14px; font-size: 14px; color: var(--text-primary); cursor: pointer; border-bottom: 1px solid var(--border); }
+.note-suggestion-item:last-child { border-bottom: none; }
+.note-suggestion-item:hover { background: var(--primary-light); }

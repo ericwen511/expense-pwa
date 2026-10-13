@@ -2051,9 +2051,85 @@ function setTxType(type) {
   document.getElementById('tx-category').required = !isTransfer;
   document.getElementById('tx-account-label').textContent = isTransfer ? '轉出帳戶' : '帳戶';
 
+  txTouchedFields.clear();
+  hideNoteSuggestions();
   populateFormSelectors();
   updateTransferExchangeRow();
 }
+
+/* ---------- 備註自動帶入 ----------
+   新增交易時輸入備註，列出過去用過的相似備註，點選後帶入最近一筆相同備註的
+   分類/帳戶/商家（金額不帶）。使用者已經手動改過的欄位不會被蓋掉。 */
+const txTouchedFields = new Set();
+
+function hideNoteSuggestions() {
+  const box = document.getElementById('tx-note-suggestions');
+  if (box) {
+    box.style.display = 'none';
+    box.innerHTML = '';
+  }
+}
+
+function renderNoteSuggestions() {
+  const box = document.getElementById('tx-note-suggestions');
+  const typed = document.getElementById('tx-note').value.trim().toLowerCase();
+  if (editingTransactionId || currentTxType === 'transfer' || !typed) {
+    hideNoteSuggestions();
+    return;
+  }
+
+  const seen = new Set();
+  const matches = [];
+  const sorted = allTransactions
+    .filter((t) => t.type === currentTxType && t.note)
+    .sort((a, b) => b.date.localeCompare(a.date));
+  for (const t of sorted) {
+    if (seen.has(t.note) || !t.note.toLowerCase().includes(typed)) continue;
+    seen.add(t.note);
+    matches.push(t);
+    if (matches.length >= 5) break;
+  }
+
+  box.innerHTML = '';
+  if (!matches.length) {
+    hideNoteSuggestions();
+    return;
+  }
+  matches.forEach((t) => {
+    const item = document.createElement('div');
+    item.className = 'note-suggestion-item';
+    item.textContent = t.note;
+    item.addEventListener('mousedown', (e) => e.preventDefault());
+    item.addEventListener('click', () => applyNoteSuggestion(t));
+    box.appendChild(item);
+  });
+  box.style.display = 'block';
+}
+
+function applyNoteSuggestion(t) {
+  document.getElementById('tx-note').value = t.note;
+  hideNoteSuggestions();
+
+  const catSel = document.getElementById('tx-category');
+  if (!txTouchedFields.has('category') && t.categoryId && [...catSel.options].some((o) => o.value === t.categoryId)) {
+    catSel.value = t.categoryId;
+  }
+  const accSel = document.getElementById('tx-account');
+  if (!txTouchedFields.has('account') && t.accountId && [...accSel.options].some((o) => o.value === t.accountId)) {
+    accSel.value = t.accountId;
+  }
+  if (!txTouchedFields.has('merchant')) {
+    const merchant = allMerchants.find((m) => m.id === t.merchantId);
+    document.getElementById('tx-merchant-input').value = merchant ? merchant.name : '';
+    document.getElementById('tx-merchant').value = merchant ? merchant.id : '';
+  }
+}
+
+document.getElementById('tx-note').addEventListener('input', renderNoteSuggestions);
+document.getElementById('tx-note').addEventListener('blur', hideNoteSuggestions);
+document.getElementById('tx-category').addEventListener('change', () => txTouchedFields.add('category'));
+document.getElementById('tx-account').addEventListener('change', () => txTouchedFields.add('account'));
+document.getElementById('tx-merchant-input').addEventListener('input', () => txTouchedFields.add('merchant'));
 
 /* 匯率一律採台灣銀行慣用的「1單位外幣＝多少台幣」報價方式(例如美金匯率31.5)。
    台幣換外幣要除以匯率，外幣換台幣要乘以匯率；兩邊都不是台幣時退回單純相乘 */
